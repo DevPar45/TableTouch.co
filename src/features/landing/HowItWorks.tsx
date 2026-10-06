@@ -1,0 +1,5 @@
+'use client';
+import { motion } from 'framer-motion';
+import { Nfc, QrCode, Sparkles } from 'lucide-react';
+const steps=[{n:'01',title:'PLACE',desc:'Place the NFC + QR card on every table.',icon:<Nfc/>},{n:'02',title:'TAP OR SCAN',desc:'Guests tap their phone or scan the QR code.',icon:<QrCode/>},{n:'03',title:'VIEW MENU',desc:'Your digital menu opens instantly.',icon:<Sparkles/>}];
+export function HowItWorks(){return <section id="how" className="section how"><div className="section-intro"><div className="eyebrow"><span/> EFFORTLESS BY DESIGN</div><h2>Tap. Scan.<br/><em>Explore.</em></h2><p>A small card makes a big difference. Your menu is always at your guest’s fingertips.</p></div><div className="steps">{steps.map((step,index)=><motion.div className="step" key={step.n} initial={{opacity:0,y:24}} whileInView={{opacity:1,y:0}} viewport={{once:true}} transition={{delay:index*.12}}><div className="step-icon">{step.icon}</div><span className="step-no">{step.n}</span><h3>{step.title}</h3><p>{step.desc}</p><div className="step-line"/></motion.div>)}</div></section>}
