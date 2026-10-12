@@ -22,7 +22,7 @@ export async function middleware(request: NextRequest) {
   const {data:{user}}=await supabase.auth.getUser();
 
   const isRestaurant=path.startsWith('/restaurant/')&&!path.startsWith('/restaurant/login');
-  const isPlatform=path.startsWith('/platform/')&&!path.startsWith('/platform/login');
+  const isPlatform=(path==='/platform'||path.startsWith('/platform/'))&&!path.startsWith('/platform/login');
   if(isRestaurant&&!user) return NextResponse.redirect(new URL('/restaurant/login',request.url));
   if(isPlatform&&!user) return NextResponse.redirect(new URL('/platform/login',request.url));
 
