@@ -1,13 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, ClipboardList, QrCode, Utensils } from 'lucide-react';
+import { ArrowRight, BellRing, Check, ClipboardList, QrCode, Utensils } from 'lucide-react';
 import { OwnerShell } from '@/components/OwnerShell';
 import { DiningSession, TableOrder } from '@/data';
 import { useStore } from '@/store';
 
 function DashboardContent() {
-  const { restaurants, sessionRestaurantId, orders, diningSessions } = useStore();
+  const { restaurants, sessionRestaurantId, orders, diningSessions, serviceRequests, updateTableServiceRequest } = useStore();
   const restaurant = restaurants.find(item => item.id === sessionRestaurantId);
   if (!restaurant) return null;
 
@@ -19,6 +19,7 @@ function DashboardContent() {
   const todayOrders = list.filter(order => new Date(order.placedAt).toLocaleDateString() === today);
   const newCount = list.filter(order => order.status === 'New').length;
   const preparingCount = list.filter(order => order.status === 'Accepted' || order.status === 'Preparing').length;
+  const openServiceRequests = serviceRequests.filter(request => request.restaurantId === restaurant.id && ['new','acknowledged'].includes(request.status));
   const tables = restaurant.tableNumbers?.length ? restaurant.tableNumbers : Array.from({ length: restaurant.tableCount || 8 }, (_, index) => String(index + 1).padStart(2, '0'));
 
   return <>
@@ -54,6 +55,10 @@ function DashboardContent() {
         </div>)}
       </section>
     </div>
+    <section className="owner-panel service-request-panel">
+      <div className="owner-panel-head"><div><h2>Guest requests</h2><p>Calls from active table sessions appear here immediately.</p></div><BellRing size={17}/></div>
+      {openServiceRequests.length===0?<div className="owner-empty service-request-empty"><div><BellRing/></div><b>No open guest requests</b><p>Guests can use Call staff from their table menu whenever they need help.</p></div>:<div className="service-request-list">{openServiceRequests.map(request=><div className={`service-request-row is-${request.status}`} key={request.id}><span className="service-request-table">{request.tableNumber}</span><div><b>Table {request.tableNumber} · {request.type.replace('_',' ')}</b><small>{request.note||'Guest requested assistance'} · {new Date(request.createdAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</small></div><span className="service-request-status">{request.status==='new'?'Needs response':'Acknowledged'}</span><div className="service-request-actions">{request.status==='new'&&<button onClick={()=>void updateTableServiceRequest(request.id,'acknowledged')}>Acknowledge</button>}<button className="service-resolve" onClick={()=>void updateTableServiceRequest(request.id,request.status==='new'?'cancelled':'resolved')}>{request.status==='new'?'Dismiss':'Done'} {request.status==='acknowledged'&&<Check size={12}/>}</button></div></div>)}</div>}
+    </section>
     <div className="owner-tip"><div><Utensils/><span><b>Your customer menu is live.</b><small>Menu updates from your restaurant workspace appear on every table link.</small></span></div><Link href={`/r/${restaurant.slug||restaurant.id}/table/1?table_token=${restaurant.tableTokens?.['01']||''}`} target="_blank">Preview table menu <ArrowRight size={14}/></Link></div>
   </>;
 }

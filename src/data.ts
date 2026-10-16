@@ -22,6 +22,7 @@ export type Restaurant = {
   slug?: string;
   name: string;
   logo: string;
+  logoUrl?: string;
   primaryColor: string;
   secondaryColor: string;
   coverImage: string;
@@ -36,9 +37,11 @@ export type Restaurant = {
   tableCount?: number;
   tableNumbers?: string[];
   tableTokens?: Record<string, string>;
+  tableDetails?: { tableNumber: string; isActive: boolean; publicToken?: string }[];
   categories: Category[];
   menuItems: MenuItem[];
   ownerEmail?: string;
+  memberRole?: 'owner' | 'manager' | 'staff';
   approvalStatus?: 'approved' | 'pending' | 'rejected';
   registrationStatus?: 'online' | 'offline' | 'paused';
   registeredAt?: string;
@@ -84,4 +87,16 @@ export type DiningSession = {
   taxAmount?: number;
   billTotal?: number;
   orders?: TableOrder[];
+};
+export type TableServiceRequest = {
+  id: string;
+  restaurantId: string;
+  tableNumber: string;
+  diningSessionId: string;
+  type: 'assistance' | 'water' | 'cutlery' | 'clean_table';
+  note?: string;
+  status: 'new' | 'acknowledged' | 'resolved' | 'cancelled';
+  createdAt: string;
+  acknowledgedAt?: string;
+  resolvedAt?: string;
 };

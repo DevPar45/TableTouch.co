@@ -1,12 +1,13 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import type { BillLine, Category, DiningSession, MenuItem, Restaurant, TableOrder } from './data';
+import { usePathname } from 'next/navigation';
+import type { BillLine, Category, DiningSession, MenuItem, Restaurant, TableOrder, TableServiceRequest } from './data';
 import { getSupabaseBrowserClient, isSupabaseConfigured } from './lib/supabase';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 type Store = {
-  restaurants: Restaurant[]; orders: TableOrder[]; diningSessions: DiningSession[];
+  restaurants: Restaurant[]; orders: TableOrder[]; diningSessions: DiningSession[]; serviceRequests: TableServiceRequest[];
   sessionRestaurantId: string | null; hydrated: boolean; configured: boolean; error: string;
   setSession: (id: string | null) => void; signOut: () => Promise<void>; refresh: () => Promise<void>; clearError: () => void;
   saveRestaurant: (restaurant: Restaurant) => Promise<void>; updateRestaurant: (id: string, update: Partial<Restaurant>) => Promise<void>;
@@ -15,11 +16,15 @@ type Store = {
   resumeDiningSession: (slug: string, tableNumber: string) => Promise<DiningSession | null>;
   placeGuestOrder: (session: DiningSession, items: { itemId: string; quantity: number }[], note?: string) => Promise<TableOrder>;
   requestGuestBill: (session: DiningSession) => Promise<DiningSession>;
+  requestTableService: (session: DiningSession, type: TableServiceRequest['type'], note?: string) => Promise<void>;
+  updateTableServiceRequest: (id: string, status: Extract<TableServiceRequest['status'],'acknowledged'|'resolved'|'cancelled'>) => Promise<void>;
   placeStaffOrder: (input: { restaurant: Restaurant; tableNumber: string; guestName: string; source: 'POS'|'Waiter'|'Counter'; sessionId?: string; items: {itemId:string;quantity:number}[]; note?: string; idempotencyKey:string }) => Promise<void>;
   prepareBill: (sessionId: string) => Promise<void>; replaceBillLines: (sessionId: string, lines: BillLine[]) => Promise<void>;
   finalizeBill: (sessionId: string) => Promise<void>; reopenBill: (sessionId: string) => Promise<void>;
   saveMenuItem: (restaurantId: string, item: MenuItem) => Promise<void>; saveMenuCategory: (restaurantId: string, category: Category) => Promise<void>;
   addTables: (restaurantId: string, count: number) => Promise<void>;
+  rotateTableToken: (restaurantId: string, tableNumber: string) => Promise<void>;
+  setTableActive: (restaurantId: string, tableNumber: string, isActive: boolean) => Promise<void>;
 };
 
 type Row = Record<string, any>;
@@ -31,18 +36,40 @@ const tableText = (value: string|number) => String(value).padStart(2,'0');
 const keyFor = (slug: string, table: string) => `tabletouch:session:${slug}:${tableText(table)}`;
 const errorText = (error: unknown) => error instanceof Error ? error.message : 'Something went wrong. Please try again.';
 
+function getPublicRestaurantSlug(pathname: string) {
+  const segments = pathname.split('/').filter(Boolean);
+  if (segments[0] === 'r') return segments[1] || null;
+  if (segments[0] === 'menu') return segments[1] || null;
+  return null;
+}
+
 function mapItem(row: Row): MenuItem {
   return { id:row.id, name:row.name, description:row.description||'', price:Number(row.price), category:row.category_id||'', image:row.image_url||'', veg:Boolean(row.is_vegetarian), bestseller:Boolean(row.is_bestseller), available:Boolean(row.is_available), tags:row.tags||[], prepMinutes:row.prep_minutes||undefined, ingredients:row.ingredients||[], allergens:row.allergens||[], spiceLevel:row.spice_level||undefined, chefRecommendation:Boolean(row.chef_recommendation), searchKeywords:row.search_keywords||[] };
 }
 
-function mapRestaurant(row: Row, categories: Category[], items: {restaurantId:string;item:MenuItem}[], tables: Row[]): Restaurant {
+function mapRestaurant(row: Row, categories: Category[], items: {restaurantId:string;item:MenuItem}[], tables: Row[], roles: Map<string,Restaurant['memberRole']>): Restaurant {
   const logo = row.logo_url ? '' : initials(row.name||'');
   const activeTables = tables.filter(table=>table.restaurant_id===row.id&&table.is_active);
-  return { id:row.id, slug:row.slug, name:row.name, logo, primaryColor:row.primary_color||'#4b111b', secondaryColor:row.accent_color||'#bc9b62', coverImage:row.cover_url||'', description:row.description||'', address:row.address||'', phone:row.phone||'', instagram:row.instagram||'', hours:row.hours||'Hours not set', taxRate:Number(row.tax_rate||0), serviceChargeRate:Number(row.service_charge_rate||0), serviceChargeLabel:row.service_charge_label||'Service charge', tableCount:activeTables.length, tableNumbers:activeTables.map(table=>table.table_number).sort(), tableTokens:Object.fromEntries(activeTables.filter(table=>table.public_token).map(table=>[table.table_number,table.public_token])), categories:categories.filter(category=>category.restaurantId===row.id).map(category=>({id:category.id,name:category.name})), menuItems:items.filter(item=>item.restaurantId===row.id).map(item=>item.item), ownerEmail:row.owner_email||'', approvalStatus:row.approval_status, registrationStatus:row.service_status, registeredAt:row.created_at, fssaiNumber:row.fssai_number||'', gstNumber:row.gst_number||'', ownerName:row.owner_name||'' };
+  return { id:row.id, slug:row.slug, name:row.name, logo, logoUrl:row.logo_url||'', primaryColor:row.primary_color||'#4b111b', secondaryColor:row.accent_color||'#bc9b62', coverImage:row.cover_url||'', description:row.description||'', address:row.address||'', phone:row.phone||'', instagram:row.instagram||'', hours:row.hours||'Hours not set', taxRate:Number(row.tax_rate||0), serviceChargeRate:Number(row.service_charge_rate||0), serviceChargeLabel:row.service_charge_label||'Service charge', tableCount:activeTables.length, tableNumbers:activeTables.map(table=>table.table_number).sort(), tableTokens:Object.fromEntries(activeTables.filter(table=>table.public_token).map(table=>[table.table_number,table.public_token])), tableDetails:tables.filter(table=>table.restaurant_id===row.id).map(table=>({tableNumber:table.table_number,isActive:Boolean(table.is_active),publicToken:table.public_token||undefined})).sort((a,b)=>a.tableNumber.localeCompare(b.tableNumber,undefined,{numeric:true})), categories:categories.filter(category=>category.restaurantId===row.id).map(category=>({id:category.id,name:category.name})), menuItems:items.filter(item=>item.restaurantId===row.id).map(item=>item.item), ownerEmail:row.owner_email||'', memberRole:roles.get(row.id), approvalStatus:row.approval_status, registrationStatus:row.service_status, registeredAt:row.created_at, fssaiNumber:row.fssai_number||'', gstNumber:row.gst_number||'', ownerName:row.owner_name||'' };
 }
 
 function toRowRestaurant(restaurant: Restaurant) {
-  return { tax_rate:restaurant.taxRate, service_charge_rate:restaurant.serviceChargeRate||0, service_charge_label:restaurant.serviceChargeLabel||'Service charge', service_status:restaurant.registrationStatus||'offline' };
+  return {
+    name:restaurant.name.trim(),
+    description:restaurant.description.trim(),
+    logo_url:restaurant.logoUrl?.trim()||null,
+    cover_url:restaurant.coverImage.trim()||null,
+    primary_color:restaurant.primaryColor,
+    accent_color:restaurant.secondaryColor,
+    phone:restaurant.phone.trim(),
+    address:restaurant.address.trim(),
+    hours:restaurant.hours.trim(),
+    instagram:restaurant.instagram.trim(),
+    tax_rate:restaurant.taxRate,
+    service_charge_rate:restaurant.serviceChargeRate||0,
+    service_charge_label:restaurant.serviceChargeLabel||'Service charge',
+    service_status:restaurant.registrationStatus||'offline',
+  };
 }
 
 function getTableOrder(row: Row, tableLookup: Map<string,string>): TableOrder {
@@ -56,6 +83,10 @@ function getDiningSession(row: Row, tables: Map<string,string>, billLines: Row[]
   return { id:row.id, restaurantId:row.restaurant_id, tableNumber:tables.get(row.table_id)||'01', guestName:row.guest_name, status:row.status, startedAt:row.started_at, billRequestedAt:row.bill_requested_at||undefined, closedAt:row.closed_at||undefined, billLines:billLines.filter(line=>line.dining_session_id===row.id).map(line=>({id:line.id,itemId:line.source_order_item_id||undefined,orderId:line.source_order_id||undefined,name:line.item_name,price:Number(line.unit_price),quantity:Number(line.quantity),kind:line.line_kind})), taxRateSnapshot:row.tax_rate_snapshot==null?undefined:Number(row.tax_rate_snapshot), serviceChargeRateSnapshot:row.service_charge_rate_snapshot==null?undefined:Number(row.service_charge_rate_snapshot), serviceChargeLabelSnapshot:row.service_charge_label_snapshot||undefined, billSubtotal:row.bill_subtotal==null?undefined:Number(row.bill_subtotal), serviceChargeAmount:row.service_charge_amount==null?undefined:Number(row.service_charge_amount), taxAmount:row.tax_amount==null?undefined:Number(row.tax_amount), billTotal:row.bill_total==null?undefined:Number(row.bill_total) };
 }
 
+function getTableServiceRequest(row: Row, tables: Map<string,string>): TableServiceRequest {
+  return {id:row.id,restaurantId:row.restaurant_id,tableNumber:tables.get(row.table_id)||'01',diningSessionId:row.dining_session_id,type:row.request_type,note:row.note||undefined,status:row.status,createdAt:row.created_at,acknowledgedAt:row.acknowledged_at||undefined,resolvedAt:row.resolved_at||undefined};
+}
+
 async function unwrap<T>(promise: PromiseLike<{data:T|null;error:any}>): Promise<T> {
   const {data,error}=await promise;
   if(error) throw error;
@@ -66,19 +97,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [restaurants,setRestaurants]=useState<Restaurant[]>([]);
   const [orders,setOrders]=useState<TableOrder[]>([]);
   const [diningSessions,setDiningSessions]=useState<DiningSession[]>([]);
+  const [serviceRequests,setServiceRequests]=useState<TableServiceRequest[]>([]);
   const [sessionRestaurantId,setSessionRestaurantId]=useState<string|null>(null);
   const [hydrated,setHydrated]=useState(false);
   const [error,setError]=useState('');
   const client=getSupabaseBrowserClient();
+  const pathname=usePathname();
+  const publicRestaurantSlug=useMemo(()=>getPublicRestaurantSlug(pathname),[pathname]);
 
   const refresh=useCallback(async()=>{
-    if(!client){setRestaurants([]);setOrders([]);setDiningSessions([]);setHydrated(true);return;}
+    if(!client){setRestaurants([]);setOrders([]);setDiningSessions([]);setServiceRequests([]);setHydrated(true);return;}
     try {
       const {data:userData}=await client.auth.getUser();
       const memberRows:Row[]=userData.user ? await unwrap(client.from('restaurant_members').select('restaurant_id,role').eq('user_id',userData.user.id)) : [];
       const memberIds=Array.from(new Set(memberRows.map(row=>row.restaurant_id)));
+      const roleByRestaurant=new Map<string,Restaurant['memberRole']>(memberRows.map(row=>[row.restaurant_id,row.role]));
       const [publicRows,ownedRows]=await Promise.all([
-        unwrap(client.from('public_restaurant_profiles').select('*')),
+        publicRestaurantSlug
+          ? unwrap(client.from('public_restaurant_profiles').select('*').eq('slug',publicRestaurantSlug).limit(1))
+          : Promise.resolve([] as Row[]),
         memberIds.length ? unwrap(client.from('restaurants').select('*').in('id',memberIds)) : Promise.resolve([] as Row[]),
       ]);
       const byId=new Map<string,Row>();[...(publicRows||[]),...(ownedRows||[])].forEach((row:Row)=>byId.set(row.id,row));const restaurantRows=Array.from(byId.values());
@@ -86,7 +123,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const [categoryRows,itemRows,tableRows]=allIds.length ? await Promise.all([
         unwrap(client.from('menu_categories').select('*').in('restaurant_id',allIds).eq('is_active',true).order('sort_order')),
         unwrap(client.from('menu_items').select('*').in('restaurant_id',allIds).order('sort_order')),
-        unwrap(client.from('active_public_tables').select('slug,table_number,is_active')),
+        publicRestaurantSlug
+          ? unwrap(client.from('active_public_tables').select('slug,table_number,is_active').eq('slug',publicRestaurantSlug))
+          : Promise.resolve([] as Row[]),
       ]) : [[],[],[]] as Row[][];
       const tableRowsForMap:Row[]=tableRows.filter((row:Row)=>!memberIds.includes(restaurantRows.find(rest=>rest.slug===row.slug)?.id||'')).map((row:Row)=>({ ...row, restaurant_id:restaurantRows.find(rest=>rest.slug===row.slug)?.id, is_active:row.is_active }));
       if(memberIds.length){
@@ -95,24 +134,26 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       const categories=(categoryRows as Row[]).map(row=>({id:row.id,name:row.name,restaurantId:row.restaurant_id} as Category & {restaurantId:string}));
       const items=(itemRows as Row[]).map(row=>({restaurantId:row.restaurant_id,item:mapItem(row)}));
-      const nextRestaurants=restaurantRows.map(row=>mapRestaurant(row,categories as Category[],items,tableRowsForMap));
+      const nextRestaurants=restaurantRows.map(row=>mapRestaurant(row,categories as Category[],items,tableRowsForMap,roleByRestaurant));
       setRestaurants(nextRestaurants);
       if(sessionRestaurantId&&!memberIds.includes(sessionRestaurantId)) setSessionRestaurantId(null);
       else if(!sessionRestaurantId&&memberIds.length) setSessionRestaurantId(memberIds[0]);
 
       if(memberIds.length){
-        const [orderRows,sessionRows,billRows]:Row[][]=await Promise.all([
+        const [orderRows,sessionRows,billRows,serviceRequestRows]:Row[][]=await Promise.all([
           unwrap(client.from('orders').select('*,order_items(*)').in('restaurant_id',memberIds).order('created_at',{ascending:false}).limit(500)),
           unwrap(client.from('dining_sessions').select('*').in('restaurant_id',memberIds).order('started_at',{ascending:false}).limit(500)),
           unwrap(client.from('dining_session_items').select('*').in('restaurant_id',memberIds).order('created_at')),
+          unwrap(client.from('table_service_requests').select('*').in('restaurant_id',memberIds).order('created_at',{ascending:false}).limit(250)),
         ]);
         const tableMap=new Map(tableRowsForMap.map((row:Row)=>[row.id,row.table_number]));
         setOrders(orderRows.map(row=>getTableOrder(row,tableMap)));
         setDiningSessions(sessionRows.map(row=>getDiningSession(row,tableMap,billRows)));
-      } else {setOrders([]);setDiningSessions([]);}
+        setServiceRequests(serviceRequestRows.map(row=>getTableServiceRequest(row,tableMap)));
+      } else {setOrders([]);setDiningSessions([]);setServiceRequests([]);}
     } catch (issue) { setError(errorText(issue)); }
     finally { setHydrated(true); }
-  },[client,sessionRestaurantId]);
+  },[client,publicRestaurantSlug,sessionRestaurantId]);
 
   useEffect(()=>{
     if(!client){setHydrated(true);return;}
@@ -130,6 +171,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       channel.on('postgres_changes',{event:'*',schema:'public',table:'orders',filter:`restaurant_id=eq.${id}`},()=>void refresh());
       channel.on('postgres_changes',{event:'*',schema:'public',table:'order_items',filter:`restaurant_id=eq.${id}`},()=>void refresh());
       channel.on('postgres_changes',{event:'*',schema:'public',table:'dining_sessions',filter:`restaurant_id=eq.${id}`},()=>void refresh());
+      channel.on('postgres_changes',{event:'*',schema:'public',table:'table_service_requests',filter:`restaurant_id=eq.${id}`},()=>void refresh());
       channel.on('postgres_changes',{event:'*',schema:'public',table:'restaurant_tables',filter:`restaurant_id=eq.${id}`},()=>void refresh());
     });
     channel.subscribe();
@@ -139,9 +181,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const run=useCallback(async(task:()=>Promise<void>)=>{try{await task();setError('');}catch(issue){setError(errorText(issue));throw issue;}},[]);
 
   const value=useMemo<Store>(()=>({
-    restaurants,orders,diningSessions,sessionRestaurantId,hydrated,configured:isSupabaseConfigured(),error,
+    restaurants,orders,diningSessions,serviceRequests,sessionRestaurantId,hydrated,configured:isSupabaseConfigured(),error,
     setSession:setSessionRestaurantId,refresh,clearError:()=>setError(''),
-    signOut:async()=>{if(!client)return;await client.auth.signOut();setRestaurants([]);setOrders([]);setDiningSessions([]);setSessionRestaurantId(null);},
+    signOut:async()=>{if(!client)return;await client.auth.signOut();setRestaurants([]);setOrders([]);setDiningSessions([]);setServiceRequests([]);setSessionRestaurantId(null);},
     saveRestaurant:async(restaurant)=>run(async()=>{if(!client)throw new Error('Connect Supabase to save restaurant settings.');await unwrap(client.from('restaurants').update(toRowRestaurant(restaurant)).eq('id',restaurant.id));await refresh();}),
     updateRestaurant:async(id,update)=>run(async()=>{if(!client)throw new Error('Connect Supabase to update restaurant status.');const payload:Row={};if(update.registrationStatus)payload.service_status=update.registrationStatus;if(update.taxRate!==undefined)payload.tax_rate=update.taxRate;if(update.serviceChargeRate!==undefined)payload.service_charge_rate=update.serviceChargeRate;if(update.serviceChargeLabel!==undefined)payload.service_charge_label=update.serviceChargeLabel;await unwrap(client.from('restaurants').update(payload).eq('id',id));await refresh();}),
     updateOrder:async(id,status)=>run(async()=>{if(!client)throw new Error('Connect Supabase to update orders.');await unwrap(client.from('orders').update({status:dbStatus(status)}).eq('id',id));await refresh();}),
@@ -169,6 +211,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const result=await unwrap(client.rpc('place_dining_session_order',{p_session_id:session.id,p_session_token:token,p_items:items.map(line=>({item_id:line.itemId,quantity:line.quantity})),p_idempotency_key:idempotencyKey,p_guest_note:note||''}));
       sessionStorage.removeItem(orderAttemptKey);
       const row=Array.isArray(result)?result[0]:result;
+      const refreshedSession=await readGuestSession(client,restaurant.slug,session.tableNumber,session.id,token,restaurants);
+      const savedOrder=refreshedSession.orders?.find(order=>order.id===row.order_id);
+      if(savedOrder)return savedOrder;
       const lineItems=items.map(line=>{const item=restaurant.menuItems.find(menu=>menu.id===line.itemId);return {itemId:line.itemId,name:item?.name||'Menu item',price:item?.price||0,quantity:line.quantity};});
       return {id:row.order_id,trackingToken:row.tracking_token,diningSessionId:session.id,guestName:session.guestName,restaurantId:restaurant.id,tableNumber:tableText(session.tableNumber),source:'QR/NFC',items:lineItems,subtotal:lineItems.reduce((sum,line)=>sum+line.price*line.quantity,0),tax:0,total:Number(row.order_total),status:'New',placedAt:new Date().toISOString(),note} as TableOrder;
     },
@@ -179,6 +224,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const {token}=JSON.parse(stored);await unwrap(client.rpc('request_dining_bill',{p_session_id:session.id,p_session_token:token}));
       return await readGuestSession(client,restaurant.slug,session.tableNumber,session.id,token,restaurants);
     },
+    requestTableService:async(session,type,note)=>{
+      if(!client)throw new Error('Table service is unavailable until Supabase is configured.');
+      const restaurant=restaurants.find(row=>row.id===session.restaurantId);if(!restaurant?.slug)throw new Error('Restaurant menu is unavailable.');
+      const stored=sessionStorage.getItem(keyFor(restaurant.slug,session.tableNumber));if(!stored)throw new Error('Your table session expired. Please ask a server for help.');
+      const {token}=JSON.parse(stored);await unwrap(client.rpc('request_table_service',{p_session_id:session.id,p_session_token:token,p_request_type:type,p_note:note?.trim()||''}));
+    },
+    updateTableServiceRequest:async(id,status)=>run(async()=>{if(!client)throw new Error('Connect Supabase before updating service requests.');await unwrap(client.rpc('update_table_service_request',{p_request_id:id,p_status:status}));await refresh();}),
     placeStaffOrder:async(input)=>run(async()=>{
       if(!client)throw new Error('Connect Supabase before entering staff orders.');
       await unwrap(client.rpc('place_staff_order',{p_restaurant_id:input.restaurant.id,p_table_number:input.tableNumber,p_guest_name:input.guestName,p_items:input.items.map(line=>({item_id:line.itemId,quantity:line.quantity})),p_idempotency_key:input.idempotencyKey,p_source:input.source,p_session_id:input.sessionId||null,p_guest_note:input.note||''}));await refresh();
@@ -193,8 +245,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if(item.id&&item.id.length>20)await unwrap(client.from('menu_items').update(payload).eq('id',item.id).eq('restaurant_id',restaurantId));else await unwrap(client.from('menu_items').insert(payload));await refresh();
     }),
     saveMenuCategory:async(restaurantId,category)=>run(async()=>{if(!client)throw new Error('Connect Supabase before editing categories.');if(category.id&&category.id.length>20)await unwrap(client.from('menu_categories').update({name:category.name.trim()}).eq('id',category.id).eq('restaurant_id',restaurantId));else await unwrap(client.from('menu_categories').insert({restaurant_id:restaurantId,name:category.name.trim(),sort_order:restaurants.find(row=>row.id===restaurantId)?.categories.length||0}));await refresh();}),
-    addTables:async(restaurantId,count)=>run(async()=>{if(!client)throw new Error('Connect Supabase before managing tables.');const restaurant=restaurants.find(row=>row.id===restaurantId);if(!restaurant)throw new Error('Restaurant unavailable.');const branches:Row[]=await unwrap(client.from('branches').select('id').eq('restaurant_id',restaurantId).order('created_at').limit(1));if(!branches[0])throw new Error('Restaurant branch is missing.');const existing=new Set(restaurant.tableNumbers||[]);const max=Math.max(0,...Array.from(existing).map(Number));const rows=Array.from({length:Math.min(100,Math.max(0,count))},(_,index)=>({restaurant_id:restaurantId,branch_id:branches[0].id,table_number:tableText(max+index+1)}));if(rows.length)await unwrap(client.from('restaurant_tables').insert(rows));await refresh();}),
-  }),[restaurants,orders,diningSessions,sessionRestaurantId,hydrated,error,client,refresh,run]);
+    addTables:async(restaurantId,count)=>run(async()=>{if(!client)throw new Error('Connect Supabase before managing tables.');const restaurant=restaurants.find(row=>row.id===restaurantId);if(!restaurant)throw new Error('Restaurant unavailable.');const branches:Row[]=await unwrap(client.from('branches').select('id').eq('restaurant_id',restaurantId).order('created_at').limit(1));if(!branches[0])throw new Error('Restaurant branch is missing.');const existing=new Set((restaurant.tableDetails||restaurant.tableNumbers||[]).map(table=>typeof table==='string'?table:table.tableNumber));const max=Math.max(0,...Array.from(existing).map(Number));const rows=Array.from({length:Math.min(100,Math.max(0,count))},(_,index)=>({restaurant_id:restaurantId,branch_id:branches[0].id,table_number:tableText(max+index+1)}));if(rows.length)await unwrap(client.from('restaurant_tables').insert(rows));await refresh();}),
+    rotateTableToken:async(restaurantId,tableNumber)=>run(async()=>{if(!client)throw new Error('Connect Supabase before rotating a table link.');await unwrap(client.rpc('rotate_table_public_token',{p_restaurant_id:restaurantId,p_table_number:tableText(tableNumber)}));await refresh();}),
+    setTableActive:async(restaurantId,tableNumber,isActive)=>run(async()=>{if(!client)throw new Error('Connect Supabase before changing a table status.');await unwrap(client.rpc('set_restaurant_table_active',{p_restaurant_id:restaurantId,p_table_number:tableText(tableNumber),p_is_active:isActive}));await refresh();}),
+  }),[restaurants,orders,diningSessions,serviceRequests,sessionRestaurantId,hydrated,error,client,refresh,run]);
 
   return <Ctx.Provider value={value}>{children}{error&&<div role="alert" className="store-error-toast"><span>{error}</span><button onClick={()=>setError('')} aria-label="Dismiss message">×</button></div>}</Ctx.Provider>;
 }

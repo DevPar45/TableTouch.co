@@ -14,8 +14,11 @@ In the Supabase project dashboard, open **SQL Editor**. Run these files in order
 4. `supabase/migrations/0004_menu_discovery_metadata.sql`
 5. `supabase/migrations/0005_staff_order_sources.sql`
 6. `supabase/migrations/0006_app_workflows.sql`
+7. `supabase/migrations/0007_role_permissions.sql`
+8. `supabase/migrations/0008_table_service_requests.sql`
+9. `supabase/migrations/0009_payments_and_receipts.sql`
 
-Migration 0006 creates the private `business-proofs` bucket, the public `restaurant-assets` bucket with restaurant-scoped write policies, secure table-order procedures, admin review operations, and an operations audit log. Keep `business-proofs` private. Never make proof files public.
+Migration 0006 creates the private `business-proofs` bucket, the public `restaurant-assets` bucket with restaurant-scoped write policies, secure table-order procedures, admin review operations, and an operations audit log. Migration 0007 enforces owner/manager/staff operational permissions and adds protected QR/NFC table-link rotation and pause/resume procedures. Migration 0008 adds secure guest service calls and the restaurant's realtime response queue. Migration 0009 adds Razorpay payment records, signed-webhook event storage, and receipts created only after capture. Keep `business-proofs` private. Never make proof files public.
 
 ## 2. Configure Supabase Auth
 
@@ -84,7 +87,7 @@ Vercel can deploy this folder directly from its CLI; a GitHub repository is opti
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 
-   Do not add any service-role/secret key. Redeploy after changing environment variables.
+   For a Razorpay-enabled Preview, also add these **server-only** variables: `SUPABASE_SERVICE_ROLE_KEY`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET`. Do not prefix them with `NEXT_PUBLIC_`. Redeploy after changing environment variables.
 
 4. Deploy a Preview:
 
@@ -100,7 +103,7 @@ Vercel's deployment process detects Next.js automatically. Use the generated Pre
 
 After the staging pilot is accepted:
 
-1. Apply the same six migrations to the separate production Supabase project.
+1. Apply the same nine migrations to the separate production Supabase project.
 2. Provision the production platform administrator in that project's `platform_admins` table.
 3. Add the production Supabase URL and publishable key to Vercel's **Production** environment only.
 4. Add the final HTTPS domain `/register` to Supabase Auth's allowed redirects and set the Site URL.
@@ -125,9 +128,11 @@ Use two restaurant owner accounts, two restaurants, two phones, and separate bro
 - An unapproved or offline restaurant has no public ordering menu.
 - A table link without its QR token can view the menu but cannot start an order session.
 - Table 02's QR creates a Table 02 order, calculates the server-side price, and appears in the correct restaurant's dashboard and kitchen queue.
+- Pause Table 02 and confirm its QR/NFC tag cannot start a new session; resume it and confirm the same physical tag works again. Rotate its capability and confirm only the newly copied QR/NFC URL can start a new session.
 - Repeated order submission after a network retry does not create a duplicate.
 - Order status changes appear on a guest's tracking link.
 - A named table session accepts multiple order rounds and one final bill; the owner can correct lines, apply the configured tax and service-charge rates, print, and close it.
+- A guest can use Call staff from a live table session; restaurant staff acknowledge or close the request from the dashboard.
 - POS/waiter orders use the same tenant-scoped queue and table bill.
 - Restaurant service can be taken offline; no table accepts orders while offline.
 - Restore a staging backup and check the Vercel and Supabase logs before moving to production.

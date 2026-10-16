@@ -83,6 +83,7 @@
   .dining-session-bar small { font-size: 13px; line-height: 1.5; }
   .dining-session-actions { align-items: stretch; flex-direction: column; }
   .dining-session-actions .button { width: 100%; }
+  .service-call-button { min-height: 42px; font-size: 12px; }
   .category-scroller { gap: 8px; padding: 14px 0; }
   .category-scroller button { flex: 0 0 auto; min-height: 42px; padding: 0 15px; font-size: 13px; }
   .menu-section-head { align-items: flex-end; gap: 10px; margin: 20px 0 14px; }
@@ -144,6 +145,11 @@
   .owner-stats small { font-size: 11px; }
   .owner-dashboard-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .owner-panel, .panel { min-width: 0; padding: 15px; }
+  .service-request-row { grid-template-columns: 36px minmax(0, 1fr); gap: 9px; }
+  .service-request-table { width: 34px; height: 34px; font-size: 14px; }
+  .service-request-status { grid-column: 2; width: max-content; }
+  .service-request-actions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; }
+  .service-request-actions button { min-height: 38px; font-size: 11px; }
   .panel-heading { flex-wrap: wrap; gap: 8px; }
   .panel-heading h2 { font-size: 19px; }
   .panel-heading p { font-size: 13px; line-height: 1.5; }
@@ -291,4 +297,18 @@
   .food-image { height: 175px; }
   .food-copy { padding: 14px; }
   .food-title-row { flex-direction: row; }
+}
+
+@media (max-width: 650px) {
+  .restaurant-settings-preview { height: 170px; }
+  .restaurant-settings-preview-copy { inset: auto 16px 16px; }
+  .restaurant-settings-preview-copy b { font-size: 20px; }
+  .restaurant-settings-preview-copy em { max-width: 210px; }
+  .restaurant-settings-body { padding: 16px; }
+  .restaurant-settings-grid, .restaurant-upload-grid { grid-template-columns: 1fr; }
+  .restaurant-settings-wide { grid-column: auto; }
+  .restaurant-settings-grid > label { font-size: 13px; }
+  .restaurant-settings-grid input, .restaurant-settings-grid textarea { min-height: 44px; font-size: 15px; }
+  .restaurant-settings-footer { align-items: flex-start; flex-direction: column; }
+  .restaurant-settings-footer .button { width: 100%; font-size: 13px; }
 }

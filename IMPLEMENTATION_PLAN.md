@@ -1,0 +1,143 @@
+# TableTouch implementation plan
+
+Last audited: 2026-10-13  
+Audited commit: `c1bd256` on `main`
+
+## Audit scope and evidence
+
+This audit covered the Next.js source under `src/`, all committed Supabase migrations, package and deployment configuration, the repository Git state, and the connected Vercel project.
+
+- Vercel project: `table-touch-co` (`Next.js`, Node.js 24.x).
+- Latest production deployment: `c1bd256`, status `READY`.
+- Production domain: `https://tabletouch.vercel.app` (verified).
+- Vercel found no grouped runtime-error clusters in the last seven days. The account's log-retention window prevented a seven-day raw runtime-log read.
+- The Vercel project has the two public Supabase environment-variable names used by this application, but their values and the actual Supabase database state are not exposed by this audit.
+- No automated test suite or CI workflow exists in the repository. `package.json` has build, dev, start, and lint scripts only.
+
+## Current architecture
+
+| Area | Implementation |
+| --- | --- |
+| Frontend | Next.js 14 App Router, React 18, TypeScript, client-side pages |
+| Styling | Repository CSS files plus Tailwind/PostCSS configuration; no component-library dependency |
+| Authentication | Supabase Auth using `@supabase/ssr`, browser client, middleware session refresh, and an email/PCKE callback route |
+| Database | Supabase Postgres with nine ordered SQL migrations and Row Level Security |
+| File storage | Supabase Storage: private `business-proofs`; public `restaurant-assets` with tenant-scoped write policies |
+| Realtime | Supabase Postgres Changes for owner order, table, and dining-session refreshes; customer tracking/session pages poll |
+| Deployment | GitHub `main` to Vercel production; no `vercel.json` or GitHub Actions workflow |
+| Payments | Razorpay server order creation, signed webhook verification, persisted payment records, and captured-payment receipts; provider credentials and live verification remain required |
+
+## Feature inventory
+
+### Implemented in source (requires Supabase migrations and configuration)
+
+- Restaurant registration with email verification, private legal-proof uploads, review state, initial categories, branch, and table records.
+- Platform-admin sign-in, restaurant approval/rejection, service-status controls, private proof links, and audit events.
+- Restaurant owner workspace with menu/category management, food-image upload, billing settings, QR links, table management, POS/waiter/counter orders, kitchen queue, order-status workflow, named dining sessions, bill review, printing, and closing/reopening bills.
+- Dynamic public restaurant menus, table QR/NFC capability links, customer cart, customer named dining session, server-priced order RPCs, bill request, table service call, and random-token order tracking.
+- Multi-tenant tables, foreign keys, RLS, price calculation inside Postgres procedures, idempotency keys, and protected private proof storage.
+
+### Partially implemented or needs verification
+
+- Supabase Auth is implemented, including the recent callback/session repair, but email templates, redirect allow-lists, and real production sign-in must be verified in the connected Supabase project.
+- Realtime owner updates are implemented. They need a staged two-restaurant test with Realtime enabled in the actual project.
+- Bills calculate and persist final amounts. They are not payments, tax invoices, or fiscal receipts.
+- QR code rendering works in the owner interface. Physical QR printing and NFC-tag programming require real-device validation.
+- Restaurant branding, contact details, colours and public menu images can be managed from the owner workspace.
+
+### Missing
+
+- Refund handling and reconciliation reporting after a provider account is connected and its live event payloads are verified.
+- Reservations, analytics/reporting, CSV/PDF exports, subscription billing, and restaurant staff invitation/management UI.
+- Staff invitation and management UI. The forward-only role migration protects configuration, orders and bills, but needs to be applied and verified before staff accounts are issued.
+- Automated unit, integration, tenant-isolation, and end-to-end tests; CI quality gates; error tracking/monitoring integration.
+- Customer-facing final-bill/receipt delivery by email, SMS, WhatsApp, or payment link.
+
+### Known risks and defects found
+
+1. **P0 — public data over-fetching:** the root client store queried every online restaurant and every published menu item for an anonymous menu visitor. This leaks publicly visible but unrelated restaurant data into the visitor's browser and will not scale. Fixed in the current working tree by loading only the restaurant named in the current public route.
+2. **P0 — table preview lost its capability:** one owner-facing “Open QR menu” link omitted `table_token`, leaving the opened page read-only. Fixed in the current working tree.
+3. **P1 — role permissions:** migration `0007_role_permissions.sql` defines owner, manager and staff access, but it is not confirmed on the connected Supabase project yet. Do not add staff accounts before staged verification.
+4. **P1 — no rate limiting or bot protection:** registration, password reset, guest-session creation, and public order RPCs rely on Supabase/database validation only. Configure Supabase Auth rate limits and CAPTCHA, then add application-level controls where the real traffic pattern needs them.
+5. **P1 — payment credentials required:** payment code is present, but no bill can be marked paid until Razorpay credentials, webhook secret, migration `0009`, and a verified provider delivery are configured.
+6. **P1 — migration state unknown:** source migrations exist but this audit could not independently inspect the connected Supabase database to confirm all eight are applied.
+7. **P2 — no structured test coverage:** source and build checks cannot prove tenant isolation, storage policies, migration behavior, or production authentication.
+
+## Prioritised implementation checklist
+
+### Stage 1 — audit and launch blockers
+
+- [x] Inspect repository, database migrations, routes, environment-variable references, Git state, and Vercel project.
+- [x] Add this persistent implementation plan.
+- [x] Stop anonymous visitors from loading unrelated restaurants' menus.
+- [x] Preserve the QR/NFC table capability when the owner opens a table menu.
+- [x] Add an owner/manager/staff permission model to RLS and security-definer procedures in forward-only migration `0007_role_permissions.sql`.
+- [ ] Apply and verify migrations `0007_role_permissions.sql` and `0008_table_service_requests.sql` against owner, manager, staff, platform-admin, guest-session, and cross-restaurant accounts in staging.
+- [ ] Add a safe staff-membership management interface after permission enforcement is in place.
+- [ ] Verify migrations, Auth redirect URLs, Storage buckets/policies, and Realtime publication in a non-production Supabase project.
+
+### Stage 2 — restaurant settings and operational readiness
+
+- [x] Implement restaurant branding/contact/opening-hours settings with image validation and tenant-safe uploads.
+- [x] Add ability to rotate a table QR/NFC token and pause/re-enable individual tables without changing the stable restaurant/table route.
+- [ ] Add owner-friendly empty/error states where a database setup step is incomplete.
+- [x] Add service-request/waiter-call data model, live owner queue, guest trigger, and staff acknowledgement/resolution workflow.
+
+### Stage 3 — money and reporting
+
+- [x] Add Razorpay server order creation, payment/event persistence, signed webhook verification, idempotent event processing, and receipt creation on a verified capture.
+- [ ] Configure Razorpay credentials and complete an actual staging capture plus webhook-delivery verification. Do not treat a browser redirect as a paid transaction.
+- [ ] Add refund processing and reconciliation after the provider's actual event payloads are verified.
+- [ ] Add receipt delivery integration only after payment collection is verified.
+- [ ] Add tenant-scoped analytics and CSV export sourced from persisted completed orders/payments.
+
+### Stage 4 — customer and restaurant product expansion
+
+- [ ] Add reservations with time-slot capacity and conflict prevention.
+- [ ] Add configurable menu themes and complete public branding.
+- [ ] Add accessible table/QR print layouts and real-device QR/NFC acceptance testing.
+
+### Stage 5 — quality, security, and release controls
+
+- [ ] Add database/RPC integration tests for registration, public ordering, idempotency, bill totals, and two-tenant isolation.
+- [ ] Add browser tests for mobile public ordering, owner workflow, order tracking, and access controls.
+- [ ] Add CI checks for type checking, build, migrations, and tests before production promotion.
+- [ ] Add error monitoring, backup/restore verification, retention/privacy policy, and a restaurant pilot runbook.
+
+## Core workflow implementation status
+
+The source implementation uses Supabase Auth, Postgres procedures, Storage and Realtime for every workflow below. The final staging test remains blocked until the connected project's migration state and test accounts are available.
+
+- [x] Restaurant-owner and platform-admin authentication guards backed by Supabase Auth and membership/admin RLS checks, with role-aware owner, manager and staff workspace navigation.
+- [x] Restaurant onboarding with authenticated registration, private proof uploads and platform review.
+- [x] Dynamic public restaurant menus scoped to the requested restaurant slug.
+- [x] Tenant-scoped menu/category editing and public food-image uploads.
+- [x] Stable `/r/<slug>/table/<number>` QR and NFC destinations with an unguessable table capability token.
+- [x] Owner controls to copy, rotate, pause and resume a table destination through Supabase procedures.
+- [x] Named guest dining sessions, cart submission, database-priced orders and idempotency keys.
+- [x] Tenant-scoped restaurant order, kitchen and bill workspaces backed by Postgres and Realtime.
+- [x] Customer order tracking using a separate random tracking token and backend status endpoint.
+- [x] Secure guest service calls tied to the dining-session token, with a realtime restaurant response queue.
+- [ ] Execute the full two-restaurant staging acceptance flow against the connected Supabase project.
+
+## Restaurant operations module checklist
+
+- [x] Kitchen display: persisted order queue, guarded status transitions, live owner updates, and customer tracking links.
+- [x] Table management: stable table destinations, protected QR/NFC rotation, pause/resume, and table-specific sessions.
+- [x] Waiter and service requests: persisted POS/waiter orders plus guest service calls and a live staff response queue.
+- [x] Payment foundation: Razorpay server order creation, payment/event persistence, HMAC verification, idempotent webhook handling, and receipts after verified capture.
+- [x] Billing and browser receipts: database-calculated final bills, controlled edits, final totals, and printable itemised output.
+- [x] Thermal-print readiness: browser print CSS is provided; validate the actual printer driver, paper width, margins, and cash-drawer setup on the restaurant device.
+- [ ] Reservations: data model, capacity controls, public booking flow, and restaurant schedule have not been implemented.
+- [ ] Sales analytics: persisted-report queries and owner reporting screens have not been implemented.
+- [x] Staff permissions: owner/manager/staff backend controls and role-aware workspace navigation are implemented. A safe invitation/management interface remains pending.
+- [ ] Subscription management: no subscription business model, provider, or entitlement rules exist in the repository, so no subscription workflow has been added.
+
+## Manual configuration still required
+
+1. In Supabase Auth, set the Site URL to `https://tabletouch.vercel.app` and allow `/auth/callback` and `/auth/reset-password` for production, preview, and localhost as appropriate.
+2. Apply migrations `0001_core.sql` through `0009_payments_and_receipts.sql` in order to a staging project before applying them to production. Confirm buckets, policies, and Realtime tables afterward.
+3. For live Razorpay payments, configure `SUPABASE_SERVICE_ROLE_KEY`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` only in Vercel's server environment. Register `/api/payments/razorpay/webhook` as the Razorpay webhook URL. None of these values belong in `NEXT_PUBLIC_*` variables.
+4. Create the first authenticated platform-admin user and add that user's UUID to `public.platform_admins` through a controlled SQL session.
+5. Confirm Vercel has `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in both Production and Preview. Do not expose a service-role key in any `NEXT_PUBLIC_*` variable.
+6. Test QR/NFC tags on physical phones and run two independent restaurant accounts through the isolation checklist before onboarding customers.

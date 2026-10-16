@@ -16,7 +16,7 @@ This is a staging-ready implementation. It is not a payment processor and still 
 
 ## Local setup
 
-1. Create a Supabase project and apply SQL migrations `0001_core.sql` through `0006_app_workflows.sql`, in numerical order.
+1. Create a Supabase project and apply SQL migrations `0001_core.sql` through `0009_payments_and_receipts.sql`, in numerical order.
 2. Copy `.env.example` to `.env.local` and set the project URL and publishable key.
 3. Add `http://localhost:3000/register` to Supabase Auth's allowed redirect URLs.
 4. Run `npm install`, then `npm run dev`.
