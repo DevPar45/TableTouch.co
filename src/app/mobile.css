@@ -150,6 +150,8 @@
   .service-request-status { grid-column: 2; width: max-content; }
   .service-request-actions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; }
   .service-request-actions button { min-height: 38px; font-size: 11px; }
+  .hotel-room-public-actions { flex-direction: column; }
+  .hotel-room-public-actions .button { justify-content: center; min-height: 44px; font-size: 13px; }
   .panel-heading { flex-wrap: wrap; gap: 8px; }
   .panel-heading h2 { font-size: 19px; }
   .panel-heading p { font-size: 13px; line-height: 1.5; }

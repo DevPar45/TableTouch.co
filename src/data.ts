@@ -19,6 +19,7 @@ export type MenuItem = {
 };
 export type Restaurant = {
   id: string;
+  businessType?: 'restaurant' | 'hotel';
   slug?: string;
   name: string;
   logo: string;
@@ -38,6 +39,12 @@ export type Restaurant = {
   tableNumbers?: string[];
   tableTokens?: Record<string, string>;
   tableDetails?: { tableNumber: string; isActive: boolean; publicToken?: string }[];
+  roomCount?: number;
+  roomDetails?: { roomNumber: string; roomType: string; floorLabel: string; isActive: boolean; roomServiceEnabled: boolean; housekeepingStatus: 'clean' | 'needs_service' | 'in_progress' | 'inspected'; publicToken?: string }[];
+  currencyCode?: string;
+  timeZone?: string;
+  welcomeMessage?: string;
+  roomServiceEnabled?: boolean;
   categories: Category[];
   menuItems: MenuItem[];
   ownerEmail?: string;
@@ -99,4 +106,16 @@ export type TableServiceRequest = {
   createdAt: string;
   acknowledgedAt?: string;
   resolvedAt?: string;
+};
+export type HotelServiceRequest = {
+  id: string;
+  hotelId: string;
+  roomNumber: string;
+  type: 'housekeeping' | 'fresh_towels' | 'extra_pillows' | 'extra_blankets' | 'toiletries' | 'water' | 'tea_coffee' | 'cutlery' | 'tray_pickup' | 'assistance' | 'luggage';
+  note?: string;
+  status: 'pending' | 'acknowledged' | 'in_progress' | 'completed' | 'cancelled';
+  assignedTo?: string;
+  createdAt: string;
+  acknowledgedAt?: string;
+  completedAt?: string;
 };
