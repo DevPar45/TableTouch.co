@@ -2,12 +2,12 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import type { BillLine, Category, DiningSession, HotelServiceRequest, MenuItem, Restaurant, TableOrder, TableServiceRequest } from './data';
+import type { BillLine, Category, DiningSession, HotelRoomServiceOrder, HotelServiceRequest, MenuItem, Restaurant, TableOrder, TableServiceRequest } from './data';
 import { getSupabaseBrowserClient, isSupabaseConfigured } from './lib/supabase';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 type Store = {
-  restaurants: Restaurant[]; orders: TableOrder[]; diningSessions: DiningSession[]; serviceRequests: TableServiceRequest[]; hotelServiceRequests: HotelServiceRequest[];
+  restaurants: Restaurant[]; orders: TableOrder[]; diningSessions: DiningSession[]; serviceRequests: TableServiceRequest[]; hotelServiceRequests: HotelServiceRequest[]; hotelRoomServiceOrders: HotelRoomServiceOrder[];
   sessionRestaurantId: string | null; hydrated: boolean; configured: boolean; error: string;
   setSession: (id: string | null) => void; signOut: () => Promise<void>; refresh: () => Promise<void>; clearError: () => void;
   saveRestaurant: (restaurant: Restaurant) => Promise<void>; updateRestaurant: (id: string, update: Partial<Restaurant>) => Promise<void>;
@@ -18,7 +18,10 @@ type Store = {
   requestGuestBill: (session: DiningSession) => Promise<DiningSession>;
   requestTableService: (session: DiningSession, type: TableServiceRequest['type'], note?: string) => Promise<void>;
   updateTableServiceRequest: (id: string, status: Extract<TableServiceRequest['status'],'acknowledged'|'resolved'|'cancelled'>) => Promise<void>;
+  requestHotelService: (input: { hotelSlug: string; roomNumber: string; roomToken: string; type: HotelServiceRequest['type']; note?: string }) => Promise<{ trackingToken: string; status: HotelServiceRequest['status'] }>;
   updateHotelServiceRequest: (id: string, status: Extract<HotelServiceRequest['status'],'acknowledged'|'in_progress'|'completed'|'cancelled'>) => Promise<void>;
+  placeHotelRoomServiceOrder: (input: { hotelSlug: string; roomNumber: string; roomToken: string; items: { itemId: string; quantity: number }[]; note?: string }) => Promise<{ trackingToken: string; total: number }>;
+  updateHotelRoomServiceOrder: (id: string, status: Extract<HotelRoomServiceOrder['status'],'accepted'|'preparing'|'ready'|'delivered'|'cancelled'>) => Promise<void>;
   placeStaffOrder: (input: { restaurant: Restaurant; tableNumber: string; guestName: string; source: 'POS'|'Waiter'|'Counter'; sessionId?: string; items: {itemId:string;quantity:number}[]; note?: string; idempotencyKey:string }) => Promise<void>;
   prepareBill: (sessionId: string) => Promise<void>; replaceBillLines: (sessionId: string, lines: BillLine[]) => Promise<void>;
   finalizeBill: (sessionId: string) => Promise<void>; reopenBill: (sessionId: string) => Promise<void>;
@@ -38,6 +41,7 @@ const dbStatus = (status: TableOrder['status']) => status.toLowerCase();
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0,2).map(part=>part[0]).join('').toUpperCase();
 const tableText = (value: string|number) => String(value).padStart(2,'0');
 const keyFor = (slug: string, table: string) => `tabletouch:session:${slug}:${tableText(table)}`;
+const hotelRequestKeyFor = (slug: string, room: string, type: HotelServiceRequest['type']) => `tabletouch:hotel-request:${slug}:${room}:${type}`;
 const errorText = (error: unknown) => error instanceof Error ? error.message : 'Something went wrong. Please try again.';
 
 function getPublicRestaurantSlug(pathname: string) {
@@ -100,6 +104,9 @@ function getTableServiceRequest(row: Row, tables: Map<string,string>): TableServ
 function getHotelServiceRequest(row: Row, rooms: Map<string,string>): HotelServiceRequest {
   return {id:row.id,hotelId:row.hotel_id,roomNumber:rooms.get(row.room_id)||'—',type:row.request_type,note:row.note||undefined,status:row.status,assignedTo:row.assigned_to||undefined,createdAt:row.created_at,acknowledgedAt:row.acknowledged_at||undefined,completedAt:row.completed_at||undefined};
 }
+function getHotelRoomServiceOrder(row: Row, rooms: Map<string,string>): HotelRoomServiceOrder {
+  return {id:row.id,hotelId:row.hotel_id,roomNumber:rooms.get(row.room_id)||'—',items:(row.order_items||[]).map((item:Row)=>({itemId:item.menu_item_id||'',name:item.item_name,price:Number(item.unit_price),quantity:Number(item.quantity)})),subtotal:Number(row.subtotal),total:Number(row.total),note:row.guest_note||undefined,status:row.status,trackingToken:row.tracking_token,createdAt:row.created_at,acceptedAt:row.accepted_at||undefined,deliveredAt:row.delivered_at||undefined};
+}
 
 async function unwrap<T>(promise: PromiseLike<{data:T|null;error:any}>): Promise<T> {
   const {data,error}=await promise;
@@ -113,6 +120,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [diningSessions,setDiningSessions]=useState<DiningSession[]>([]);
   const [serviceRequests,setServiceRequests]=useState<TableServiceRequest[]>([]);
   const [hotelServiceRequests,setHotelServiceRequests]=useState<HotelServiceRequest[]>([]);
+  const [hotelRoomServiceOrders,setHotelRoomServiceOrders]=useState<HotelRoomServiceOrder[]>([]);
   const [sessionRestaurantId,setSessionRestaurantId]=useState<string|null>(null);
   const [hydrated,setHydrated]=useState(false);
   const [error,setError]=useState('');
@@ -122,7 +130,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const publicHotelSlug=useMemo(()=>getPublicHotelSlug(pathname),[pathname]);
 
   const refresh=useCallback(async()=>{
-    if(!client){setRestaurants([]);setOrders([]);setDiningSessions([]);setServiceRequests([]);setHotelServiceRequests([]);setHydrated(true);return;}
+    if(!client){setRestaurants([]);setOrders([]);setDiningSessions([]);setServiceRequests([]);setHotelServiceRequests([]);setHotelRoomServiceOrders([]);setHydrated(true);return;}
     try {
       const {data:userData}=await client.auth.getUser();
       const memberRows:Row[]=userData.user ? await unwrap(client.from('restaurant_members').select('restaurant_id,role').eq('user_id',userData.user.id)) : [];
@@ -164,12 +172,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       else if(!sessionRestaurantId&&memberIds.length) setSessionRestaurantId(memberIds[0]);
 
       if(memberIds.length){
-        const [orderRows,sessionRows,billRows,serviceRequestRows,hotelServiceRequestRows]:Row[][]=await Promise.all([
+        const [orderRows,sessionRows,billRows,serviceRequestRows,hotelServiceRequestRows,hotelRoomOrderRows]:Row[][]=await Promise.all([
           unwrap(client.from('orders').select('*,order_items(*)').in('restaurant_id',memberIds).order('created_at',{ascending:false}).limit(500)),
           unwrap(client.from('dining_sessions').select('*').in('restaurant_id',memberIds).order('started_at',{ascending:false}).limit(500)),
           unwrap(client.from('dining_session_items').select('*').in('restaurant_id',memberIds).order('created_at')),
           unwrap(client.from('table_service_requests').select('*').in('restaurant_id',memberIds).order('created_at',{ascending:false}).limit(250)),
           unwrap(client.from('hotel_service_requests').select('*').in('hotel_id',memberIds).order('created_at',{ascending:false}).limit(250)),
+          unwrap(client.from('hotel_room_service_orders').select('*').in('hotel_id',memberIds).order('created_at',{ascending:false}).limit(250)),
         ]);
         const tableMap=new Map(tableRowsForMap.map((row:Row)=>[row.id,row.table_number]));
         const roomMap=new Map(roomRowsForMap.map((row:Row)=>[row.id,row.room_number]));
@@ -177,7 +186,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setDiningSessions(sessionRows.map(row=>getDiningSession(row,tableMap,billRows)));
         setServiceRequests(serviceRequestRows.map(row=>getTableServiceRequest(row,tableMap)));
         setHotelServiceRequests(hotelServiceRequestRows.map(row=>getHotelServiceRequest(row,roomMap)));
-      } else {setOrders([]);setDiningSessions([]);setServiceRequests([]);setHotelServiceRequests([]);}
+        setHotelRoomServiceOrders(hotelRoomOrderRows.map(row=>getHotelRoomServiceOrder(row,roomMap)));
+      } else {setOrders([]);setDiningSessions([]);setServiceRequests([]);setHotelServiceRequests([]);setHotelRoomServiceOrders([]);}
     } catch (issue) { setError(errorText(issue)); }
     finally { setHydrated(true); }
   },[client,publicRestaurantSlug,publicHotelSlug,sessionRestaurantId]);
@@ -200,6 +210,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       channel.on('postgres_changes',{event:'*',schema:'public',table:'dining_sessions',filter:`restaurant_id=eq.${id}`},()=>void refresh());
       channel.on('postgres_changes',{event:'*',schema:'public',table:'table_service_requests',filter:`restaurant_id=eq.${id}`},()=>void refresh());
       channel.on('postgres_changes',{event:'*',schema:'public',table:'hotel_service_requests',filter:`hotel_id=eq.${id}`},()=>void refresh());
+      channel.on('postgres_changes',{event:'*',schema:'public',table:'hotel_room_service_orders',filter:`hotel_id=eq.${id}`},()=>void refresh());
       channel.on('postgres_changes',{event:'*',schema:'public',table:'restaurant_tables',filter:`restaurant_id=eq.${id}`},()=>void refresh());
       channel.on('postgres_changes',{event:'*',schema:'public',table:'hotel_rooms',filter:`hotel_id=eq.${id}`},()=>void refresh());
     });
@@ -210,9 +221,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const run=useCallback(async(task:()=>Promise<void>)=>{try{await task();setError('');}catch(issue){setError(errorText(issue));throw issue;}},[]);
 
   const value=useMemo<Store>(()=>({
-    restaurants,orders,diningSessions,serviceRequests,hotelServiceRequests,sessionRestaurantId,hydrated,configured:isSupabaseConfigured(),error,
+    restaurants,orders,diningSessions,serviceRequests,hotelServiceRequests,hotelRoomServiceOrders,sessionRestaurantId,hydrated,configured:isSupabaseConfigured(),error,
     setSession:setSessionRestaurantId,refresh,clearError:()=>setError(''),
-    signOut:async()=>{if(!client)return;await client.auth.signOut();setRestaurants([]);setOrders([]);setDiningSessions([]);setServiceRequests([]);setHotelServiceRequests([]);setSessionRestaurantId(null);},
+    signOut:async()=>{if(!client)return;await client.auth.signOut();setRestaurants([]);setOrders([]);setDiningSessions([]);setServiceRequests([]);setHotelServiceRequests([]);setHotelRoomServiceOrders([]);setSessionRestaurantId(null);},
     saveRestaurant:async(restaurant)=>run(async()=>{if(!client)throw new Error('Connect Supabase to save restaurant settings.');await unwrap(client.from('restaurants').update(toRowRestaurant(restaurant)).eq('id',restaurant.id));await refresh();}),
     updateRestaurant:async(id,update)=>run(async()=>{if(!client)throw new Error('Connect Supabase to update restaurant status.');const payload:Row={};if(update.registrationStatus)payload.service_status=update.registrationStatus;if(update.taxRate!==undefined)payload.tax_rate=update.taxRate;if(update.serviceChargeRate!==undefined)payload.service_charge_rate=update.serviceChargeRate;if(update.serviceChargeLabel!==undefined)payload.service_charge_label=update.serviceChargeLabel;await unwrap(client.from('restaurants').update(payload).eq('id',id));await refresh();}),
     updateOrder:async(id,status)=>run(async()=>{if(!client)throw new Error('Connect Supabase to update orders.');await unwrap(client.from('orders').update({status:dbStatus(status)}).eq('id',id));await refresh();}),
@@ -260,7 +271,31 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const {token}=JSON.parse(stored);await unwrap(client.rpc('request_table_service',{p_session_id:session.id,p_session_token:token,p_request_type:type,p_note:note?.trim()||''}));
     },
     updateTableServiceRequest:async(id,status)=>run(async()=>{if(!client)throw new Error('Connect Supabase before updating service requests.');await unwrap(client.rpc('update_table_service_request',{p_request_id:id,p_status:status}));await refresh();}),
+    requestHotelService:async(input)=>{
+      if(!client)throw new Error('Hotel service is unavailable until Supabase is configured.');
+      if(!input.roomToken)throw new Error('Use the QR or NFC tag provided in this room.');
+      const key=hotelRequestKeyFor(input.hotelSlug,input.roomNumber,input.type);
+      let attempt:{idempotencyKey:string;trackingToken:string}|null=null;
+      try{attempt=JSON.parse(sessionStorage.getItem(key)||'null');}catch{}
+      if(!attempt)attempt={idempotencyKey:crypto.randomUUID(),trackingToken:crypto.randomUUID()};
+      sessionStorage.setItem(key,JSON.stringify(attempt));
+      const result=await unwrap(client.rpc('request_hotel_service',{p_hotel_slug:input.hotelSlug,p_room_number:input.roomNumber,p_room_token:input.roomToken,p_request_type:input.type,p_note:input.note?.trim()||'',p_idempotency_key:attempt.idempotencyKey,p_tracking_token:attempt.trackingToken}));
+      const row=Array.isArray(result)?result[0]:result;
+      if(!row?.tracking_token)throw new Error('The hotel service request could not be confirmed. Please try again.');
+      sessionStorage.removeItem(key);
+      return {trackingToken:String(row.tracking_token),status:row.status as HotelServiceRequest['status']};
+    },
     updateHotelServiceRequest:async(id,status)=>run(async()=>{if(!client)throw new Error('Connect Supabase before updating hotel service requests.');await unwrap(client.rpc('update_hotel_service_request',{p_request_id:id,p_status:status}));await refresh();}),
+    placeHotelRoomServiceOrder:async(input)=>{
+      if(!client)throw new Error('Room service is unavailable until Supabase is configured.');
+      if(!input.roomToken)throw new Error('Use the QR or NFC tag provided in this room.');
+      const key=`tabletouch:room-order:${input.hotelSlug}:${input.roomNumber}`;
+      const idempotencyKey=sessionStorage.getItem(key)||crypto.randomUUID();sessionStorage.setItem(key,idempotencyKey);
+      const result=await unwrap(client.rpc('place_hotel_room_service_order',{p_hotel_slug:input.hotelSlug,p_room_number:input.roomNumber,p_room_token:input.roomToken,p_items:input.items.map(item=>({item_id:item.itemId,quantity:item.quantity})),p_idempotency_key:idempotencyKey,p_guest_note:input.note?.trim()||''}));
+      const row=Array.isArray(result)?result[0]:result;if(!row?.tracking_token)throw new Error('The room-service order could not be confirmed. Please try again.');
+      sessionStorage.removeItem(key);return {trackingToken:String(row.tracking_token),total:Number(row.order_total)};
+    },
+    updateHotelRoomServiceOrder:async(id,status)=>run(async()=>{if(!client)throw new Error('Connect Supabase before updating room-service orders.');await unwrap(client.rpc('update_hotel_room_service_order',{p_order_id:id,p_status:status}));await refresh();}),
     placeStaffOrder:async(input)=>run(async()=>{
       if(!client)throw new Error('Connect Supabase before entering staff orders.');
       await unwrap(client.rpc('place_staff_order',{p_restaurant_id:input.restaurant.id,p_table_number:input.tableNumber,p_guest_name:input.guestName,p_items:input.items.map(line=>({item_id:line.itemId,quantity:line.quantity})),p_idempotency_key:input.idempotencyKey,p_source:input.source,p_session_id:input.sessionId||null,p_guest_note:input.note||''}));await refresh();
@@ -281,7 +316,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setTableActive:async(restaurantId,tableNumber,isActive)=>run(async()=>{if(!client)throw new Error('Connect Supabase before changing a table status.');await unwrap(client.rpc('set_restaurant_table_active',{p_restaurant_id:restaurantId,p_table_number:tableText(tableNumber),p_is_active:isActive}));await refresh();}),
     rotateHotelRoomToken:async(hotelId,roomNumber)=>run(async()=>{if(!client)throw new Error('Connect Supabase before rotating a room link.');await unwrap(client.rpc('rotate_hotel_room_public_token',{p_hotel_id:hotelId,p_room_number:roomNumber}));await refresh();}),
     setHotelRoomActive:async(hotelId,roomNumber,isActive)=>run(async()=>{if(!client)throw new Error('Connect Supabase before changing a room status.');await unwrap(client.rpc('set_hotel_room_active',{p_hotel_id:hotelId,p_room_number:roomNumber,p_is_active:isActive}));await refresh();}),
-  }),[restaurants,orders,diningSessions,serviceRequests,hotelServiceRequests,sessionRestaurantId,hydrated,error,client,refresh,run]);
+  }),[restaurants,orders,diningSessions,serviceRequests,hotelServiceRequests,hotelRoomServiceOrders,sessionRestaurantId,hydrated,error,client,refresh,run]);
 
   return <Ctx.Provider value={value}>{children}{error&&<div role="alert" className="store-error-toast"><span>{error}</span><button onClick={()=>setError('')} aria-label="Dismiss message">×</button></div>}</Ctx.Provider>;
 }

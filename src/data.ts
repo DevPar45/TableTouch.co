@@ -119,3 +119,17 @@ export type HotelServiceRequest = {
   acknowledgedAt?: string;
   completedAt?: string;
 };
+export type HotelRoomServiceOrder = {
+  id: string;
+  hotelId: string;
+  roomNumber: string;
+  items: { itemId: string; name: string; price: number; quantity: number }[];
+  subtotal: number;
+  total: number;
+  note?: string;
+  status: 'new' | 'accepted' | 'preparing' | 'ready' | 'delivered' | 'cancelled';
+  trackingToken: string;
+  createdAt: string;
+  acceptedAt?: string;
+  deliveredAt?: string;
+};

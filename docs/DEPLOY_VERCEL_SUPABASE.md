@@ -17,8 +17,12 @@ In the Supabase project dashboard, open **SQL Editor**. Run these files in order
 7. `supabase/migrations/0007_role_permissions.sql`
 8. `supabase/migrations/0008_table_service_requests.sql`
 9. `supabase/migrations/0009_payments_and_receipts.sql`
+10. `supabase/migrations/0010_hotel_foundation.sql`
+11. `supabase/migrations/0011_hotel_onboarding_details.sql`
+12. `supabase/migrations/0012_hotel_service_requests.sql`
+13. `supabase/migrations/0013_hotel_room_service_orders.sql`
 
-Migration 0006 creates the private `business-proofs` bucket, the public `restaurant-assets` bucket with restaurant-scoped write policies, secure table-order procedures, admin review operations, and an operations audit log. Migration 0007 enforces owner/manager/staff operational permissions and adds protected QR/NFC table-link rotation and pause/resume procedures. Migration 0008 adds secure guest service calls and the restaurant's realtime response queue. Migration 0009 adds Razorpay payment records, signed-webhook event storage, and receipts created only after capture. Keep `business-proofs` private. Never make proof files public.
+Migration 0006 creates the private `business-proofs` bucket, the public `restaurant-assets` bucket with restaurant-scoped write policies, secure table-order procedures, admin review operations, and an operations audit log. Migration 0007 enforces owner/manager/staff operational permissions and adds protected QR/NFC table-link rotation and pause/resume procedures. Migration 0008 adds secure guest service calls and the restaurant's realtime response queue. Migration 0009 adds Razorpay payment records, signed-webhook event storage, and receipts created only after capture. Migrations 0010–0013 add the additive hotel model, room QR/NFC destinations, unified onboarding, room-token-verified guest-service requests, and server-priced room-service orders with hotel-staff delivery transitions. Keep `business-proofs` private. Never make proof files public.
 
 ## 2. Configure Supabase Auth
 
@@ -103,7 +107,7 @@ Vercel's deployment process detects Next.js automatically. Use the generated Pre
 
 After the staging pilot is accepted:
 
-1. Apply the same nine migrations to the separate production Supabase project.
+1. Apply the same thirteen migrations to the separate production Supabase project.
 2. Provision the production platform administrator in that project's `platform_admins` table.
 3. Add the production Supabase URL and publishable key to Vercel's **Production** environment only.
 4. Add the final HTTPS domain `/register` to Supabase Auth's allowed redirects and set the Site URL.

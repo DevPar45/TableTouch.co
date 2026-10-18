@@ -314,3 +314,26 @@
   .restaurant-settings-footer { align-items: flex-start; flex-direction: column; }
   .restaurant-settings-footer .button { width: 100%; font-size: 13px; }
 }
+
+@media (max-width: 700px) {
+  .hotel-service-form { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .hotel-service-form select, .hotel-service-form textarea, .hotel-service-form .button { min-height: 46px; height: auto; font-size: 14px; }
+  .hotel-service-form textarea { min-height: 72px; }
+  .hotel-service-form label { font-size: 13px; }
+  .hotel-menu-grid { grid-template-columns: minmax(0, 1fr); }
+  .hotel-menu-item { padding: 14px; }
+  .hotel-menu-item b { font-size: 17px; }
+  .hotel-menu-item small { font-size: 12px; }
+  .hotel-menu-item strong { font-size: 13px; }
+  .hotel-menu-quantity button { width: 38px; height: 38px; }
+  .hotel-menu-quantity>b { font-size: 13px; }
+  .hotel-menu-quantity .hotel-menu-add { min-height: 38px; font-size: 12px; }
+  .hotel-order-checkout { grid-template-columns: minmax(0, 1fr); padding: 14px; }
+  .hotel-order-checkout label, .hotel-order-checkout>div>span { font-size: 13px; }
+  .hotel-order-checkout textarea { min-height: 72px; font-size: 14px; }
+  .hotel-order-checkout>div { align-items: stretch; }
+  .hotel-order-checkout .button { justify-content: center; min-height: 46px; font-size: 13px; }
+  .hotel-service-message, .hotel-service-unavailable { font-size: 13px; line-height: 1.45; }
+  .hotel-service-unavailable b { font-size: 13px; }
+  .hotel-service-unavailable p { font-size: 12px; }
+}

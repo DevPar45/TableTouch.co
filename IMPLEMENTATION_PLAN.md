@@ -1,8 +1,8 @@
 # TableTouch implementation plan
 
-Last audited: 2026-10-16
+Last audited: 2026-10-18
 Audited branch: `feature/tabletouch-upgrade`
-Audited commit: `19f6219`
+Audited commit: `5760b19` (with uncommitted hotel guest-service work under review)
 
 ## Audit scope and evidence
 
@@ -15,7 +15,7 @@ This audit covered the Next.js source under `src/`, all committed Supabase migra
 - The Vercel project has the two public Supabase environment-variable names used by this application, but their values and the actual Supabase database state are not exposed by this audit.
 - No automated test suite or CI workflow exists in the repository. `package.json` has build, dev, start, and lint scripts only.
 - `.env.local` is not present in this workspace. Supabase, Razorpay, deployed route, payment, and tenant-isolation runtime checks are therefore blocked here; no secret values were read or exposed.
-- `npx tsc --noEmit`, `npm run build`, and `git diff --check` passed after the current hotel-foundation changes. `npm run lint` opened the unconfigured Next.js ESLint setup prompt, so lint is blocked until a project ESLint configuration is added.
+- `npx tsc --noEmit` and `git diff --check` passed after the current hotel guest-service changes. The current local production build is blocked by generated-folder permissions in this OneDrive workspace; see the verification table. `npm run lint` opened the unconfigured Next.js ESLint setup prompt, so lint is blocked until a project ESLint configuration is added.
 
 ## Current architecture
 
@@ -24,7 +24,7 @@ This audit covered the Next.js source under `src/`, all committed Supabase migra
 | Frontend | Next.js 14 App Router, React 18, TypeScript, client-side pages |
 | Styling | Repository CSS files plus Tailwind/PostCSS configuration; no component-library dependency |
 | Authentication | Supabase Auth using `@supabase/ssr`, browser client, middleware session refresh, and an email/PCKE callback route |
-| Database | Supabase Postgres with eleven ordered SQL migrations and Row Level Security |
+| Database | Supabase Postgres with thirteen ordered SQL migrations and Row Level Security |
 | File storage | Supabase Storage: private `business-proofs`; public `restaurant-assets` with tenant-scoped write policies |
 | Realtime | Supabase Postgres Changes for owner order, table, and dining-session refreshes; customer tracking/session pages poll |
 | Deployment | GitHub `main` to Vercel production; no `vercel.json` or GitHub Actions workflow |
@@ -40,6 +40,8 @@ This audit covered the Next.js source under `src/`, all committed Supabase migra
 - Dynamic public restaurant menus, table QR/NFC capability links, customer cart, customer named dining session, server-priced order RPCs, bill request, table service call, and random-token order tracking.
 - Multi-tenant tables, foreign keys, RLS, price calculation inside Postgres procedures, idempotency keys, and protected private proof storage.
 - Hotel foundation: an additive business type, distinct room records, hotel-safe public profile/room views, manager-protected room QR/NFC lifecycle controls, hotel owner room inventory, a public room information page without guest data, and unified restaurant/hotel onboarding.
+- Hotel guest service: a room-token-verified request RPC with idempotency and rate limits, privacy-safe guest tracking, realtime hotel staff queue, and server-enforced acknowledgement, progress, completion, and manager-only cancellation transitions.
+- Hotel room service: room-token-verified, server-priced menu orders with menu snapshots, idempotency, tracking, staff delivery transitions, and explicit staff-mediated payment/room-charge handling.
 
 ### Partially implemented or needs verification
 
@@ -56,7 +58,7 @@ This audit covered the Next.js source under `src/`, all committed Supabase migra
 - Staff invitation and management UI. The forward-only role migration protects configuration, orders and bills, but needs to be applied and verified before staff accounts are issued.
 - Automated unit, integration, tenant-isolation, and end-to-end tests; CI quality gates; error tracking/monitoring integration.
 - Customer-facing final-bill/receipt delivery by email, SMS, WhatsApp, or payment link.
-- Hotel room-service ordering, hotel guest-service requests, hotel staff role workflows, room-service billing, reservations, notifications, reporting, and hotel onboarding UI.
+- Hotel room-service billing, reservations, notifications, reporting, and a staff invitation/assignment management interface.
 
 ### Known risks and defects found
 
@@ -65,7 +67,7 @@ This audit covered the Next.js source under `src/`, all committed Supabase migra
 3. **P1 — role permissions:** migration `0007_role_permissions.sql` defines owner, manager and staff access, but it is not confirmed on the connected Supabase project yet. Do not add staff accounts before staged verification.
 4. **P1 — no rate limiting or bot protection:** registration, password reset, guest-session creation, and public order RPCs rely on Supabase/database validation only. Configure Supabase Auth rate limits and CAPTCHA, then add application-level controls where the real traffic pattern needs them.
 5. **P1 — payment credentials required:** payment code is present, but no bill can be marked paid until Razorpay credentials, webhook secret, migration `0009`, and a verified provider delivery are configured.
-6. **P1 — migration state unknown:** source migrations exist but this audit could not independently inspect the connected Supabase database to confirm migrations `0001` through `0010` are applied.
+6. **P1 — migration state unknown:** source migrations exist but this audit could not independently inspect the connected Supabase database to confirm migrations `0001` through `0013` are applied.
 7. **P2 — no structured test coverage:** source and build checks cannot prove tenant isolation, storage policies, migration behavior, or production authentication.
 8. **P2 — project linting is not configured:** `npm run lint` opens an interactive setup prompt and cannot validate source until an ESLint configuration and dependency are committed.
 
@@ -116,8 +118,8 @@ This audit covered the Next.js source under `src/`, all committed Supabase migra
 - [x] Add tenant-scoped hotel rooms with stable QR/NFC capability tokens, public-safe room lookup views, RLS, realtime publication, and owner/manager controls.
 - [x] Add a public `/hotel/<slug>/room/<room>` page that never reveals occupancy, guest, stay, room-bill, or internal operations data.
 - [x] Add unified restaurant/hotel onboarding that calls `register_hospitality_business` with validated property currency, time zone, welcome message, and initial room count.
-- [ ] Add room-service order/session tables, server-priced order creation, delivery transitions, and guest tracking.
-- [ ] Add hotel guest-service requests, assignment, server-enforced staff roles, and hotel dashboards.
+- [x] Add room-service order tables, server-priced menu snapshots, room-token validation, idempotency, guarded delivery transitions, privacy-safe tracking, and a hotel staff queue. Payment and room charges remain staff-mediated.
+- [x] Add hotel guest-service requests with QR/NFC room-token validation, idempotency/rate controls, safe tracking, server-enforced transitions, realtime hotel queue, and hotel dashboard actions.
 - [ ] Add hotel reporting, authorised payment workflows, and staff-mediated room charges only after a verified stay/PMS integration is available.
 
 ## Core workflow implementation status
@@ -153,20 +155,20 @@ The source implementation uses Supabase Auth, Postgres procedures, Storage and R
 
 | Area | Status | Evidence / limitation |
 | --- | --- | --- |
-| Type checking | Verified | `npx tsc --noEmit` passed after hotel-foundation changes. |
+| Type checking | Verified | `npx tsc --noEmit` passed after hotel guest-service changes. |
 | Source whitespace | Verified | `git diff --check` passed. |
 | Lint | Blocked | `npm run lint` opens Next.js's ESLint configuration prompt; no committed ESLint config exists. |
-| Production build | Verified | `npm run build` completed with exit code 0. |
+| Production build | Blocked locally | The current source compiled successfully during `next build`, but Windows denied generated-folder operations in the OneDrive workspace. A temporary-folder retry then failed resolving Next's generated type imports because sandbox policy denied a required `node_modules` junction. Verify the final build in Vercel Preview or a non-synced local folder. |
 | Supabase migrations/RLS | Blocked | No linked project or local environment credentials are available to apply or query migrations. |
 | Restaurant runtime flows | Blocked | Requires a staging Supabase project, real test accounts, and an approved online restaurant. |
-| Hotel runtime flows | Incomplete / blocked | Hotel foundation is source-checked only; onboarding and room-service order workflows are not yet implemented. |
+| Hotel runtime flows | Partially implemented / blocked | Onboarding, room QR/NFC destinations, guest-service and room-service ordering/tracking queues are source-checked only. Real database and device validation is still required; payment and room charges remain staff-mediated. |
 | Razorpay capture/webhook | Blocked | Requires server-only credentials and a real signed staging webhook delivery. |
 | QR/NFC/thermal hardware | Blocked | Requires physical phones, programmed NFC tags, a printer driver, and target printer. |
 
 ## Manual configuration still required
 
 1. In Supabase Auth, set the Site URL to `https://tabletouch.vercel.app` and allow `/auth/callback` and `/auth/reset-password` for production, preview, and localhost as appropriate.
-2. Apply migrations `0001_core.sql` through `0011_hotel_onboarding_details.sql` in order to a staging project before applying them to production. Confirm buckets, policies, Realtime tables, and the public hotel views afterward.
+2. Apply migrations `0001_core.sql` through `0013_hotel_room_service_orders.sql` in order to a staging project before applying them to production. Confirm buckets, policies, Realtime tables, the public hotel views, hotel service-request procedures, and room-service procedures afterward.
 3. For live Razorpay payments, configure `SUPABASE_SERVICE_ROLE_KEY`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` only in Vercel's server environment. Register `/api/payments/razorpay/webhook` as the Razorpay webhook URL. None of these values belong in `NEXT_PUBLIC_*` variables.
 4. Create the first authenticated platform-admin user and add that user's UUID to `public.platform_admins` through a controlled SQL session.
 5. Confirm Vercel has `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in both Production and Preview. Do not expose a service-role key in any `NEXT_PUBLIC_*` variable.
