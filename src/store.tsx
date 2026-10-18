@@ -42,7 +42,16 @@ const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0,2).
 const tableText = (value: string|number) => String(value).padStart(2,'0');
 const keyFor = (slug: string, table: string) => `tabletouch:session:${slug}:${tableText(table)}`;
 const hotelRequestKeyFor = (slug: string, room: string, type: HotelServiceRequest['type']) => `tabletouch:hotel-request:${slug}:${room}:${type}`;
-const errorText = (error: unknown) => error instanceof Error ? error.message : 'Something went wrong. Please try again.';
+const errorText = (error: unknown) => {
+  const detail = error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error && typeof (error as {message?:unknown}).message === 'string' ? (error as {message:string}).message : '';
+  const code = typeof error === 'object' && error && 'code' in error ? String((error as {code?:unknown}).code||'') : '';
+  if (/failed to fetch|network|fetch failed|networkerror/i.test(detail)) return 'We could not reach the service. Check your internet connection and try again.';
+  if (/jwt|session|not authenticated|unauthorized/i.test(detail)) return 'Your sign-in session has ended. Please sign in again and retry.';
+  if (/permission denied|row-level security|not allowed|forbidden/i.test(detail)) return 'Your account does not have access to complete that action.';
+  if (/relation .* does not exist|schema cache|PGRST20[45]|42P01/i.test(`${code} ${detail}`)) return 'This workspace needs a database update before that feature can be used.';
+  return detail || 'We could not complete that action. Please try again.';
+};
+async function optionalRows(task:()=>Promise<Row[]>):Promise<Row[]>{try{return await task();}catch{return [];}}
 
 function getPublicRestaurantSlug(pathname: string) {
   const segments = pathname.split('/').filter(Boolean);
@@ -141,7 +150,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           ? unwrap(client.from('public_restaurant_profiles').select('*').eq('slug',publicRestaurantSlug).limit(1))
           : Promise.resolve([] as Row[]),
         publicHotelSlug
-          ? unwrap(client.from('public_hotel_profiles').select('*').eq('slug',publicHotelSlug).limit(1))
+          ? optionalRows(()=>unwrap(client.from('public_hotel_profiles').select('*').eq('slug',publicHotelSlug).limit(1)))
           : Promise.resolve([] as Row[]),
         memberIds.length ? unwrap(client.from('restaurants').select('*').in('id',memberIds)) : Promise.resolve([] as Row[]),
       ]);
@@ -154,7 +163,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           ? unwrap(client.from('active_public_tables').select('slug,table_number,is_active').eq('slug',publicRestaurantSlug))
           : Promise.resolve([] as Row[]),
         publicHotelSlug
-          ? unwrap(client.from('active_public_hotel_rooms').select('slug,room_number,room_service_enabled').eq('slug',publicHotelSlug))
+          ? optionalRows(()=>unwrap(client.from('active_public_hotel_rooms').select('slug,room_number,room_service_enabled').eq('slug',publicHotelSlug)))
           : Promise.resolve([] as Row[]),
       ]) : [[],[],[],[]] as Row[][];
       const tableRowsForMap:Row[]=tableRows.filter((row:Row)=>!memberIds.includes(restaurantRows.find(rest=>rest.slug===row.slug)?.id||'')).map((row:Row)=>({ ...row, restaurant_id:restaurantRows.find(rest=>rest.slug===row.slug)?.id, is_active:row.is_active }));
@@ -163,7 +172,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         for(const table of privateTables) if(!tableRowsForMap.some(existing=>existing.restaurant_id===table.restaurant_id&&existing.table_number===table.table_number)) tableRowsForMap.push(table);
       }
       const roomRowsForMap:Row[]=(publicRoomRows as Row[]).filter(row=>!memberIds.includes(restaurantRows.find(rest=>rest.slug===row.slug)?.id||'')).map(row=>({...row,hotel_id:restaurantRows.find(rest=>rest.slug===row.slug)?.id,is_active:true,archived_at:null}));
-      if(memberIds.length){const privateRooms:Row[]=await unwrap(client.from('hotel_rooms').select('*').in('hotel_id',memberIds));for(const room of privateRooms)if(!roomRowsForMap.some(existing=>existing.hotel_id===room.hotel_id&&existing.room_number===room.room_number))roomRowsForMap.push(room);}
+      if(memberIds.length){const privateRooms:Row[]=await optionalRows(()=>unwrap(client.from('hotel_rooms').select('*').in('hotel_id',memberIds)));for(const room of privateRooms)if(!roomRowsForMap.some(existing=>existing.hotel_id===room.hotel_id&&existing.room_number===room.room_number))roomRowsForMap.push(room);}
       const categories=(categoryRows as Row[]).map(row=>({id:row.id,name:row.name,restaurantId:row.restaurant_id} as Category & {restaurantId:string}));
       const items=(itemRows as Row[]).map(row=>({restaurantId:row.restaurant_id,item:mapItem(row)}));
       const nextRestaurants=restaurantRows.map(row=>mapRestaurant(row,categories as Category[],items,tableRowsForMap,roomRowsForMap,roleByRestaurant));
@@ -176,9 +185,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           unwrap(client.from('orders').select('*,order_items(*)').in('restaurant_id',memberIds).order('created_at',{ascending:false}).limit(500)),
           unwrap(client.from('dining_sessions').select('*').in('restaurant_id',memberIds).order('started_at',{ascending:false}).limit(500)),
           unwrap(client.from('dining_session_items').select('*').in('restaurant_id',memberIds).order('created_at')),
-          unwrap(client.from('table_service_requests').select('*').in('restaurant_id',memberIds).order('created_at',{ascending:false}).limit(250)),
-          unwrap(client.from('hotel_service_requests').select('*').in('hotel_id',memberIds).order('created_at',{ascending:false}).limit(250)),
-          unwrap(client.from('hotel_room_service_orders').select('*').in('hotel_id',memberIds).order('created_at',{ascending:false}).limit(250)),
+          optionalRows(()=>unwrap(client.from('table_service_requests').select('*').in('restaurant_id',memberIds).order('created_at',{ascending:false}).limit(250))),
+          optionalRows(()=>unwrap(client.from('hotel_service_requests').select('*').in('hotel_id',memberIds).order('created_at',{ascending:false}).limit(250))),
+          optionalRows(()=>unwrap(client.from('hotel_room_service_orders').select('*').in('hotel_id',memberIds).order('created_at',{ascending:false}).limit(250))),
         ]);
         const tableMap=new Map(tableRowsForMap.map((row:Row)=>[row.id,row.table_number]));
         const roomMap=new Map(roomRowsForMap.map((row:Row)=>[row.id,row.room_number]));
@@ -188,6 +197,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setHotelServiceRequests(hotelServiceRequestRows.map(row=>getHotelServiceRequest(row,roomMap)));
         setHotelRoomServiceOrders(hotelRoomOrderRows.map(row=>getHotelRoomServiceOrder(row,roomMap)));
       } else {setOrders([]);setDiningSessions([]);setServiceRequests([]);setHotelServiceRequests([]);setHotelRoomServiceOrders([]);}
+      setError('');
     } catch (issue) { setError(errorText(issue)); }
     finally { setHydrated(true); }
   },[client,publicRestaurantSlug,publicHotelSlug,sessionRestaurantId]);
@@ -318,7 +328,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setHotelRoomActive:async(hotelId,roomNumber,isActive)=>run(async()=>{if(!client)throw new Error('Connect Supabase before changing a room status.');await unwrap(client.rpc('set_hotel_room_active',{p_hotel_id:hotelId,p_room_number:roomNumber,p_is_active:isActive}));await refresh();}),
   }),[restaurants,orders,diningSessions,serviceRequests,hotelServiceRequests,hotelRoomServiceOrders,sessionRestaurantId,hydrated,error,client,refresh,run]);
 
-  return <Ctx.Provider value={value}>{children}{error&&<div role="alert" className="store-error-toast"><span>{error}</span><button onClick={()=>setError('')} aria-label="Dismiss message">×</button></div>}</Ctx.Provider>;
+  return <Ctx.Provider value={value}>{children}{error&&<div role="alert" className="store-error-toast"><div><b>Action needs attention</b><span>{error}</span></div><button onClick={()=>setError('')} aria-label="Dismiss message">×</button></div>}</Ctx.Provider>;
 }
 
 async function readGuestSession(client: SupabaseClient,slug:string,table:string,id:string,token:string,restaurants:Restaurant[]):Promise<DiningSession>{

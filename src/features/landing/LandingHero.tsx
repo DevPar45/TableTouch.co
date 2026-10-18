@@ -7,14 +7,14 @@ export function LandingHero() {
       <div className="hero-photo" />
       <div className="hero-shade" />
       <div className="hero-content">
-        <div className="eyebrow light"><span /> A BETTER WAY TO MENU</div>
-        <h1>TURN EVERY TABLE<br />INTO A <em>DIGITAL MENU.</em></h1>
-        <p>Premium NFC + QR menus with restaurant workspaces, live table orders and kitchen status in one place.</p>
+        <div className="eyebrow light"><span /> QR · NFC · LIVE SERVICE</div>
+        <h1>FROM THE FIRST<br />SCAN TO THE <em>FINAL BILL.</em></h1>
+        <p>Give every guest a beautiful table menu. Give your floor and kitchen one clear, live service flow.</p>
         <div className="hero-buttons">
-          <a className="button button-gold" href="/register">Register your restaurant <ArrowRight size={16} /></a>
-          <a className="button button-outline" href="#how">How it works</a>
+          <a className="button button-gold" href="/register">Start your restaurant setup <ArrowRight size={16} /></a>
+          <a className="button button-outline" href="#how">See the service flow</a>
         </div>
-        <div className="hero-note"><span className="avatar-stack"><i>✦</i><i>✳</i><i>✦</i></span><span>Designed for the moments<br />that happen around a table</span></div>
+        <div className="hero-note"><span className="avatar-stack"><i>✦</i><i>✳</i><i>✦</i></span><span>Menu, orders, kitchen and billing<br />in one restaurant workspace</span></div>
       </div>
       <motion.div className="hero-card" animate={{ y: [0, -10, 0], rotate: [2, 0, 2] }} transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}>
         <div className="table-card">
@@ -34,9 +34,9 @@ export function LandingHero() {
             <div className="phone-image" />
             <div className="phone-logo">t.</div>
             <b>Restaurant menu</b>
-            <small>LIVE TABLE SERVICE</small>
+            <small>LIVE TABLE ORDERING</small>
             <div className="phone-line" />
-            <span>ORDERS ROUTE TO YOUR KITCHEN</span>
+            <span>ORDER · PREPARE · SERVE</span>
           </div>
         </motion.div>
         <div className="tap-signal"><Nfc size={17} /><span>Tap to explore</span></div>

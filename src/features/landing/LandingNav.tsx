@@ -11,7 +11,8 @@ export function LandingNav() {
       <Brand />
       <div id="site-navigation" className={'nav-links ' + (open ? 'nav-open' : '')}>
         <a href="#how" onClick={() => setOpen(false)}>How it works</a>
-        <a href="#product" onClick={() => setOpen(false)}>The card</a>
+        <a href="#features" onClick={() => setOpen(false)}>Features</a>
+        <a href="#product" onClick={() => setOpen(false)}>QR & NFC</a>
         <a href="/restaurant/login" onClick={() => setOpen(false)}>Restaurant sign in</a>
       </div>
       <div className="nav-actions">

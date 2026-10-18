@@ -337,3 +337,7 @@
   .hotel-service-unavailable b { font-size: 13px; }
   .hotel-service-unavailable p { font-size: 12px; }
 }
+
+@media (max-width: 760px) {
+  .steps.steps-four { grid-template-columns: 1fr; gap: 8px; }
+}
