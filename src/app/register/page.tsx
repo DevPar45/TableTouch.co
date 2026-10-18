@@ -61,7 +61,7 @@ export default function RestaurantRegistration(){
         if(!email.trim()||!password){throw new Error('Enter your account email and password to finish signing in.');}
         const {data,error:signInError}=await supabase.auth.signInWithPassword({email:email.trim(),password});
         if(signInError){if(signInError.code==='email_not_confirmed')throw new Error('Verify your email using the link we sent, then return here and select “I verified my email”.');throw signInError;}
-        const activeSession=await requireAuthSession(supabase);
+        const activeSession=await requireAuthSession(supabase,data.session);
         setAccount({id:activeSession.user.id,email:activeSession.user.email||email});
         setVerificationPending(false);setNeedsOwnerSignIn(false);setPassword('');
         setMessage('You are signed in. Complete the restaurant details and attach a business proof.');
@@ -69,7 +69,7 @@ export default function RestaurantRegistration(){
       }
       const result=await supabase.auth.signUp({email:email.trim(),password,options:{data:{full_name:ownerName.trim()},emailRedirectTo:`${window.location.origin}/auth/callback?next=%2Fregister`}});
       if(result.error)throw result.error;
-      if(result.data.user&&result.data.session){const activeSession=await requireAuthSession(supabase);setAccount({id:activeSession.user.id,email:activeSession.user.email||email});setPassword('');setMessage('Account created. Complete the restaurant details below.');}
+      if(result.data.user&&result.data.session){const activeSession=await requireAuthSession(supabase,result.data.session);setAccount({id:activeSession.user.id,email:activeSession.user.email||email});setPassword('');setMessage('Account created. Complete the restaurant details below.');}
       else{setVerificationPending(true);setMessage('We sent a verification link to your email. Open it, then return here. We will sign you in and continue the application.');}
     }catch(issue){setError(issue instanceof Error?issue.message:'Could not create your account.');}
     finally{setWorking(false);}

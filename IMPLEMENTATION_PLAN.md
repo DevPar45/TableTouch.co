@@ -108,6 +108,8 @@ This audit covered the Next.js source under `src/`, all committed Supabase migra
 ### Stage 5 — quality, security, and release controls
 
 - [x] Replace the client-wide generic failure message with clear session, network, permission, and migration guidance. Optional hotel reads now fail independently so an unapplied hotel migration cannot block the restaurant workspace.
+- [x] Strengthen restaurant, registration, and platform sign-in flows by using the session returned by Supabase directly, checking workspace access before redirecting, and showing clear account-role guidance.
+- [x] Remove decorative emoji glyphs from the customer-facing UI and replace them with SVG/CSS marks that render consistently on mobile devices.
 - [x] Refresh the public landing story around the implemented QR/NFC → named order → kitchen → final-bill workflow, with an original heritage restaurant visual direction and phone-responsive flow cards.
 - [ ] Add database/RPC integration tests for registration, public ordering, idempotency, bill totals, and two-tenant isolation.
 - [ ] Add browser tests for mobile public ordering, owner workflow, order tracking, and access controls.
