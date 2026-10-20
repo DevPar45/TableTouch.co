@@ -340,4 +340,7 @@
 
 @media (max-width: 760px) {
   .steps.steps-four { grid-template-columns: 1fr; gap: 8px; }
+  .service-pricing-grid { grid-template-columns: 1fr; gap: 14px; }
+  .service-pricing-grid .price-card { padding: 24px 22px; }
+  .service-pricing-grid .price-card > p, .service-pricing-grid .price-card ul { min-height: 0; }
 }

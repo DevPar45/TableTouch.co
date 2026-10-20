@@ -94,6 +94,7 @@ This audit covered the Next.js source under `src/`, all committed Supabase migra
 ### Stage 3 — money and reporting
 
 - [x] Add Razorpay server order creation, payment/event persistence, signed webhook verification, idempotent event processing, and receipt creation on a verified capture.
+- [x] Add the TableTouch commercial service catalogue and persist a restaurant's selected plan during onboarding. Plans are quoted and activated after review; no subscription charge is simulated.
 - [ ] Configure Razorpay credentials and complete an actual staging capture plus webhook-delivery verification. Do not treat a browser redirect as a paid transaction.
 - [ ] Add refund processing and reconciliation after the provider's actual event payloads are verified.
 - [ ] Add receipt delivery integration only after payment collection is verified.
@@ -110,6 +111,7 @@ This audit covered the Next.js source under `src/`, all committed Supabase migra
 - [x] Replace the client-wide generic failure message with clear session, network, permission, and migration guidance. Optional hotel reads now fail independently so an unapplied hotel migration cannot block the restaurant workspace.
 - [x] Strengthen restaurant, registration, and platform sign-in flows by using the session returned by Supabase directly, checking workspace access before redirecting, and showing clear account-role guidance.
 - [x] Remove decorative emoji glyphs from the customer-facing UI and replace them with SVG/CSS marks that render consistently on mobile devices.
+- [x] Repair the Vercel/Supabase variable-name mismatch: browser-safe Supabase configuration now accepts the connected integration's standard URL and publishable/anon-key names, while server secrets remain private.
 - [x] Refresh the public landing story around the implemented QR/NFC → named order → kitchen → final-bill workflow, with an original heritage restaurant visual direction and phone-responsive flow cards.
 - [ ] Add database/RPC integration tests for registration, public ordering, idempotency, bill totals, and two-tenant isolation.
 - [ ] Add browser tests for mobile public ordering, owner workflow, order tracking, and access controls.
