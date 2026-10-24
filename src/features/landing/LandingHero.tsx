@@ -12,7 +12,7 @@ export function LandingHero() {
         <p>Give every guest a beautiful table menu. Give your floor and kitchen one clear, live service flow.</p>
         <div className="hero-buttons">
           <a className="button button-gold" href="/register">Start your restaurant setup <ArrowRight size={16} /></a>
-          <a className="button button-outline" href="#how">See the service flow</a>
+          <a className="button button-outline" href="/how-it-works">See the service flow</a>
         </div>
         <div className="hero-note"><span className="avatar-stack" aria-hidden="true"><i/><i/><i/></span><span>Menu, orders, kitchen and billing<br />in one restaurant workspace</span></div>
       </div>
@@ -41,7 +41,7 @@ export function LandingHero() {
         </motion.div>
         <div className="tap-signal"><Nfc size={17} /><span>Tap to explore</span></div>
       </motion.div>
-      <div className="hero-bottom"><span>01 — THE NEW WAY TO DINE</span><a href="#how">SCROLL TO EXPLORE <ArrowDown size={13} /></a></div>
+      <div className="hero-bottom"><span>01 — THE NEW WAY TO DINE</span><a href="/how-it-works">EXPLORE THE FLOW <ArrowDown size={13} /></a></div>
     </section>
   );
 }

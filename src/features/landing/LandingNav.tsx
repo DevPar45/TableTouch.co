@@ -10,9 +10,10 @@ export function LandingNav() {
     <nav className="nav">
       <Brand />
       <div id="site-navigation" className={'nav-links ' + (open ? 'nav-open' : '')}>
-        <a href="#how" onClick={() => setOpen(false)}>How it works</a>
-        <a href="#features" onClick={() => setOpen(false)}>Features</a>
-        <a href="#product" onClick={() => setOpen(false)}>QR & NFC</a>
+        <a href="/how-it-works" onClick={() => setOpen(false)}>How it works</a>
+        <a href="/features" onClick={() => setOpen(false)}>Restaurant tools</a>
+        <a href="/table-cards" onClick={() => setOpen(false)}>QR & NFC cards</a>
+        <a href="/plans" onClick={() => setOpen(false)}>Plans</a>
         <a href="/restaurant/login" onClick={() => setOpen(false)}>Restaurant sign in</a>
       </div>
       <div className="nav-actions">

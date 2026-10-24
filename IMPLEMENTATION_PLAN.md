@@ -113,6 +113,7 @@ This audit covered the Next.js source under `src/`, all committed Supabase migra
 - [x] Remove decorative emoji glyphs from the customer-facing UI and replace them with SVG/CSS marks that render consistently on mobile devices.
 - [x] Repair the Vercel/Supabase variable-name mismatch: browser-safe Supabase configuration now accepts the connected integration's standard URL and publishable/anon-key names, while server secrets remain private.
 - [x] Refresh the public landing story around the implemented QR/NFC → named order → kitchen → final-bill workflow, with an original heritage restaurant visual direction and phone-responsive flow cards.
+- [x] Split the public product story into focused, mobile-responsive routes for the service flow, restaurant tools, QR/NFC table cards, and service plans. Added a branded route-recovery screen so unexpected render failures never show Next.js's generic error copy.
 - [ ] Add database/RPC integration tests for registration, public ordering, idempotency, bill totals, and two-tenant isolation.
 - [ ] Add browser tests for mobile public ordering, owner workflow, order tracking, and access controls.
 - [ ] Add CI checks for type checking, build, migrations, and tests before production promotion.
@@ -161,7 +162,7 @@ The source implementation uses Supabase Auth, Postgres procedures, Storage and R
 
 | Area | Status | Evidence / limitation |
 | --- | --- | --- |
-| Type checking | Verified | `npx tsc --noEmit` passed after hotel guest-service changes. |
+| Type checking | Verified | `npx tsc --noEmit` passed after the public experience route changes. |
 | Source whitespace | Verified | `git diff --check` passed. |
 | Lint | Blocked | `npm run lint` opens Next.js's ESLint configuration prompt; no committed ESLint config exists. |
 | Production build | Blocked locally | The current source compiled successfully during `next build`, but Windows denied generated-folder operations in the OneDrive workspace. A temporary-folder retry then failed resolving Next's generated type imports because sandbox policy denied a required `node_modules` junction. Verify the final build in Vercel Preview or a non-synced local folder. |
@@ -174,7 +175,7 @@ The source implementation uses Supabase Auth, Postgres procedures, Storage and R
 ## Manual configuration still required
 
 1. In Supabase Auth, set the Site URL to `https://tabletouch.vercel.app` and allow `/auth/callback` and `/auth/reset-password` for production, preview, and localhost as appropriate.
-2. Apply migrations `0001_core.sql` through `0013_hotel_room_service_orders.sql` in order to a staging project before applying them to production. Confirm buckets, policies, Realtime tables, the public hotel views, hotel service-request procedures, and room-service procedures afterward.
+2. Apply migrations `0001_core.sql` through `0014_service_plan_selection.sql` in order to a staging project before applying them to production. Confirm buckets, policies, Realtime tables, the public hotel views, hotel service-request procedures, room-service procedures, and service-plan fields afterward.
 3. For live Razorpay payments, configure `SUPABASE_SERVICE_ROLE_KEY`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` only in Vercel's server environment. Register `/api/payments/razorpay/webhook` as the Razorpay webhook URL. None of these values belong in `NEXT_PUBLIC_*` variables.
 4. Create the first authenticated platform-admin user and add that user's UUID to `public.platform_admins` through a controlled SQL session.
 5. Confirm Vercel has `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in both Production and Preview. Do not expose a service-role key in any `NEXT_PUBLIC_*` variable.
