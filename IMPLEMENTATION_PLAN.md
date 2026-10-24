@@ -110,6 +110,7 @@ This audit covered the Next.js source under `src/`, all committed Supabase migra
 
 - [x] Replace the client-wide generic failure message with clear session, network, permission, and migration guidance. Optional hotel reads now fail independently so an unapplied hotel migration cannot block the restaurant workspace.
 - [x] Strengthen restaurant, registration, and platform sign-in flows by using the session returned by Supabase directly, checking workspace access before redirecting, and showing clear account-role guidance.
+- [x] Separate owner-account creation, verification-email resend, password sign-in, and password recovery paths so unconfirmed and incorrect-password states receive clear recovery guidance.
 - [x] Remove decorative emoji glyphs from the customer-facing UI and replace them with SVG/CSS marks that render consistently on mobile devices.
 - [x] Repair the Vercel/Supabase variable-name mismatch: browser-safe Supabase configuration now accepts the connected integration's standard URL and publishable/anon-key names, while server secrets remain private.
 - [x] Refresh the public landing story around the implemented QR/NFC → named order → kitchen → final-bill workflow, with an original heritage restaurant visual direction and phone-responsive flow cards.
@@ -174,7 +175,7 @@ The source implementation uses Supabase Auth, Postgres procedures, Storage and R
 
 ## Manual configuration still required
 
-1. In Supabase Auth, set the Site URL to `https://tabletouch.vercel.app` and allow `/auth/callback` and `/auth/reset-password` for production, preview, and localhost as appropriate.
+1. In Supabase Auth, set the Site URL to `https://www.tabletouch.in`, add `https://www.tabletouch.in/auth/callback` and `https://www.tabletouch.in/auth/reset-password` to Redirect URLs, and configure a verified SMTP sender before relying on Gmail verification or password-recovery delivery.
 2. Apply migrations `0001_core.sql` through `0014_service_plan_selection.sql` in order to a staging project before applying them to production. Confirm buckets, policies, Realtime tables, the public hotel views, hotel service-request procedures, room-service procedures, and service-plan fields afterward.
 3. For live Razorpay payments, configure `SUPABASE_SERVICE_ROLE_KEY`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` only in Vercel's server environment. Register `/api/payments/razorpay/webhook` as the Razorpay webhook URL. None of these values belong in `NEXT_PUBLIC_*` variables.
 4. Create the first authenticated platform-admin user and add that user's UUID to `public.platform_admins` through a controlled SQL session.

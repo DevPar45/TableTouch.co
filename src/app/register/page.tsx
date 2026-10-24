@@ -54,33 +54,50 @@ export default function RestaurantRegistration(){
   useEffect(()=>{try{const draft=sessionStorage.getItem('tabletouch:application-draft');if(draft){const saved=JSON.parse(draft);setBusinessType(saved.businessType==='hotel'?'hotel':'restaurant');setOwnerName(saved.ownerName||'');setRestaurantName(saved.restaurantName||'');setSlug(saved.slug||'');setPhone(saved.phone||'');setAddress(saved.address||'');setFssai(saved.fssai||'');setGst(saved.gst||'');setTableCount(saved.tableCount||8);setCurrencyCode(saved.currencyCode||'INR');setTimeZone(saved.timeZone||'Asia/Kolkata');setWelcomeMessage(saved.welcomeMessage||'');if(isServicePlanCode(saved.servicePlan))setServicePlan(saved.servicePlan);}}catch{}setDraftRestored(true);},[]);
   useEffect(()=>{if(draftRestored)sessionStorage.setItem('tabletouch:application-draft',JSON.stringify({businessType,ownerName,restaurantName,slug,phone,address,fssai,gst,tableCount,currencyCode,timeZone,welcomeMessage,servicePlan}));},[draftRestored,businessType,ownerName,restaurantName,slug,phone,address,fssai,gst,tableCount,currencyCode,timeZone,welcomeMessage,servicePlan]);
 
-  const continueWithAccount=async()=>{
+  const authRedirect=()=>`${window.location.origin}/auth/callback?next=%2Fregister`;
+  const signInOwner=async()=>{
     if(!supabase){setError('Add your Supabase project URL and publishable key before accepting applications.');return;}
     setError('');setMessage('');setWorking(true);
     try{
       const {data:sessionData,error:sessionError}=await supabase.auth.getSession();if(sessionError)throw sessionError;
       if(sessionData.session){const {data,error:authError}=await supabase.auth.getUser();if(authError)throw authError;if(data.user){setAccount({id:data.user.id,email:data.user.email||email});setMessage('You are signed in. Complete the restaurant details and attach a business proof.');return;}}
-      if(verificationPending||needsOwnerSignIn){
-        if(!email.trim()||!password){throw new Error('Enter your account email and password to finish signing in.');}
-        const {data,error:signInError}=await supabase.auth.signInWithPassword({email:email.trim(),password});
-        if(signInError){if(signInError.code==='email_not_confirmed')throw new Error('Verify your email using the link we sent, then return here and select “I verified my email”.');throw signInError;}
-        const activeSession=await requireAuthSession(supabase,data.session);
-        setAccount({id:activeSession.user.id,email:activeSession.user.email||email});
-        setVerificationPending(false);setNeedsOwnerSignIn(false);setPassword('');
-        setMessage('You are signed in. Complete the restaurant details and attach a business proof.');
-        return;
+      if(!email.trim()||!password)throw new Error('Enter your account email and password to sign in.');
+      const {data,error:signInError}=await supabase.auth.signInWithPassword({email:email.trim(),password});
+      if(signInError){
+        if(signInError.code==='email_not_confirmed')throw new Error('This account still needs email confirmation. Check spam and request a fresh verification email below.');
+        if(signInError.code==='invalid_credentials')throw new Error('That email and password do not match. Check the password or use “Forgot password?” to reset it.');
+        throw signInError;
       }
-      const result=await supabase.auth.signUp({email:email.trim(),password,options:{data:{full_name:ownerName.trim()},emailRedirectTo:`${window.location.origin}/auth/callback?next=%2Fregister`}});
+      const activeSession=await requireAuthSession(supabase,data.session);
+      setAccount({id:activeSession.user.id,email:activeSession.user.email||email});
+      setVerificationPending(false);setNeedsOwnerSignIn(false);setPassword('');
+      setMessage('You are signed in. Complete the restaurant details and attach a business proof.');
+    }catch(issue){setError(issue instanceof Error?issue.message:'Could not sign in to this account.');}
+    finally{setWorking(false);}
+  };
+  const createOwnerAccount=async()=>{
+    if(!supabase){setError('Add your Supabase project URL and publishable key before accepting applications.');return;}
+    if(!ownerName.trim()||!email.trim()||password.length<10){setError('Enter your name, email address and a password with at least 10 characters.');return;}
+    setError('');setMessage('');setWorking(true);
+    try{
+      const result=await supabase.auth.signUp({email:email.trim(),password,options:{data:{full_name:ownerName.trim()},emailRedirectTo:authRedirect()}});
       if(result.error)throw result.error;
       if(result.data.user&&result.data.session){const activeSession=await requireAuthSession(supabase,result.data.session);setAccount({id:activeSession.user.id,email:activeSession.user.email||email});setPassword('');setMessage('Account created. Complete the restaurant details below.');}
-      else{setVerificationPending(true);setMessage('We sent a verification link to your email. Open it, then return here. We will sign you in and continue the application.');}
+      else{setVerificationPending(true);setNeedsOwnerSignIn(false);setMessage('Verification email sent. Check Gmail’s Inbox, Spam and Promotions folders, open the newest TableTouch email, then return here to sign in.');}
     }catch(issue){setError(issue instanceof Error?issue.message:'Could not create your account.');}
+    finally{setWorking(false);}
+  };
+  const resendVerification=async()=>{
+    if(!supabase||!email.trim()){setError('Enter the email address you used for this account.');return;}
+    setError('');setMessage('');setWorking(true);
+    try{const {error:resendError}=await supabase.auth.resend({type:'signup',email:email.trim(),options:{emailRedirectTo:authRedirect()}});if(resendError)throw resendError;setVerificationPending(true);setMessage('A new verification email was sent. Check Inbox, Spam and Promotions, then open the newest message.');}
+    catch(issue){const detail=issue instanceof Error?issue.message:'Could not send a new verification email.';setError(/rate limit|too many/i.test(detail)?'A verification email was sent recently. Wait a minute, then request another one.':detail);}
     finally{setWorking(false);}
   };
 
   const submit=async(event:FormEvent)=>{
     event.preventDefault();setError('');setMessage('');if(!supabase){setError('Add your Supabase project URL and publishable key before accepting applications.');return;}
-    if(!account){await continueWithAccount();return;}
+    if(!account){if(verificationPending||needsOwnerSignIn)await signInOwner();else await createOwnerAccount();return;}
     if(proofs.length===0){setError('Attach at least one business registration, tax record, licence, or other business proof.');return;}
     if(proofs.some(file=>!allowed.has(file.type)||file.size>10*1024*1024)){setError('Proofs must be PDF, JPG, PNG, or WebP files under 10 MB each.');return;}
     setWorking(true);
@@ -111,8 +128,9 @@ export default function RestaurantRegistration(){
         {!needsOwnerSignIn&&<label>Owner’s full name<input required minLength={2} maxLength={100} value={ownerName} onChange={e=>setOwnerName(e.target.value)} autoComplete="name"/></label>}
         <label>Business email<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email"/></label>
         <label>Password <small>Use at least 10 characters.</small><input required type="password" minLength={10} value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password"/></label>
-        <button className="button button-dark full-button" type="button" disabled={working||showSupabaseError} onClick={continueWithAccount}>{working?<LoaderCircle className="spin" size={16}/>:null}{needsOwnerSignIn?'Sign in and continue':verificationPending?'I verified my email — sign in':'Create owner account and continue'}</button>
-        <p className="onboarding-split">Already registered? <Link href="/restaurant/login">Sign in to continue</Link></p>
+        <button className="button button-dark full-button" type="button" disabled={working||showSupabaseError} onClick={verificationPending||needsOwnerSignIn?signInOwner:createOwnerAccount}>{working?<LoaderCircle className="spin" size={16}/>:null}{needsOwnerSignIn?'Sign in and continue':verificationPending?'I verified my email — sign in':'Create owner account and continue'}</button>
+        {verificationPending&&<div className="auth-email-actions"><button type="button" disabled={working} onClick={resendVerification}>Resend verification email</button><Link href={`/restaurant/login?email=${encodeURIComponent(email)}`}>Use an existing account</Link></div>}
+        <p className="onboarding-split">Already registered? <Link href={`/restaurant/login?email=${encodeURIComponent(email)}`}>Sign in to continue</Link></p>
       </>:<>
         <div className="account-confirmed"><CheckCircle2 size={17}/><span>Signed in as <b>{account.email}</b></span></div>
         <h2>{businessType==='hotel'?'Property details':'Restaurant details'}</h2>
@@ -126,7 +144,7 @@ export default function RestaurantRegistration(){
         <label className="proof-upload"><span><FileCheck2 size={17}/> Business proof documents</span><small>FSSAI, GST, shop registration, or other legal business proof. PDF, JPG, PNG, WebP · max 10 MB per file.</small><input required type="file" accept=".pdf,image/jpeg,image/png,image/webp" multiple onChange={e=>setProofs(Array.from(e.target.files||[]))}/>{proofs.length>0&&<b>{proofs.map(file=>file.name).join(' · ')}</b>}</label>
         <button className="button button-dark full-button" disabled={working||showSupabaseError}>{working?<LoaderCircle className="spin" size={16}/>:<ShieldCheck size={16}/>} Submit for verification</button>
       </>}
-      {error&&<div className="form-error" role="alert">{error}</div>}{message&&<div className="form-success" role="status">{message}{!account&&verificationPending&&<button type="button" onClick={continueWithAccount}>I verified my email</button>}</div>}
+      {error&&<div className="form-error" role="alert">{error}</div>}{message&&<div className="form-success" role="status">{message}</div>}
     </form>
     <small className="onboarding-privacy">Business documents are stored in a private bucket. Only the applying owner and verified Tabletouch administrators can access them.</small>
   </section></main>;

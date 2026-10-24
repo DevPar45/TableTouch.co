@@ -253,6 +253,7 @@
   .register-fields label, .onboarding-form > label, .onboarding-two-col > label { font-size: 13px; }
   .register-fields input, .onboarding-form input, .onboarding-form textarea, .onboarding-two-col input, .slug-input input { min-height: 48px; font-size: 16px; }
   .onboarding-form > label small, .proof-upload > small, .onboarding-privacy, .application-next-step small { font-size: 12px !important; line-height: 1.5; }
+  .auth-email-actions { align-items: flex-start; flex-direction: column; gap: 9px; }
   .proof-upload { min-width: 0; }
   .proof-upload input[type=file] { max-width: 100%; font-size: 13px; }
   .proof-upload > b { overflow-wrap: anywhere; font-size: 11px; }
