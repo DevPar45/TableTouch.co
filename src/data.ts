@@ -38,7 +38,7 @@ export type Restaurant = {
   tableCount?: number;
   tableNumbers?: string[];
   tableTokens?: Record<string, string>;
-  tableDetails?: { tableNumber: string; isActive: boolean; publicToken?: string }[];
+  tableDetails?: { id?: string; tableNumber: string; isActive: boolean; publicToken?: string }[];
   roomCount?: number;
   roomDetails?: { roomNumber: string; roomType: string; floorLabel: string; isActive: boolean; roomServiceEnabled: boolean; housekeepingStatus: 'clean' | 'needs_service' | 'in_progress' | 'inspected'; publicToken?: string }[];
   currencyCode?: string;

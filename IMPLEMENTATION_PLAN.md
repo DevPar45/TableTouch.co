@@ -1,6 +1,6 @@
 # TableTouch implementation plan
 
-Last audited: 2026-10-18
+Last audited: 2026-10-26
 Audited branch: `feature/tabletouch-upgrade`
 Audited commit: `5760b19` (with uncommitted hotel guest-service work under review)
 
@@ -102,7 +102,8 @@ This audit covered the Next.js source under `src/`, all committed Supabase migra
 
 ### Stage 4 — customer and restaurant product expansion
 
-- [ ] Add reservations with time-slot capacity and conflict prevention.
+- [x] Add a secure owner/manager reservation schedule, private guest details, table assignment, realtime refresh, and booked → arrived → seated → completed/cancelled lifecycle in `0015_restaurant_reservations.sql` and `/restaurant/reservations`. It requires migration application and a two-tenant staging test.
+- [ ] Add reservation time-slot capacity and conflict warnings before automatic table assignment is enabled.
 - [ ] Add configurable menu themes and complete public branding.
 - [ ] Add accessible table/QR print layouts and real-device QR/NFC acceptance testing.
 

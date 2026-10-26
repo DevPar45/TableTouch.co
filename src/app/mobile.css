@@ -25,6 +25,15 @@
   .hero-buttons .button { min-height: 48px; font-size: 14px; }
   .hero-note { margin-top: 28px; font-size: 12px; }
   .hero-card { display: none; }
+  .hero { min-height: 790px; padding-bottom: 46px; }
+  .hero-product-showcase { position: absolute; right: 18px; left: 18px; top: auto; bottom: 62px; width: auto; height: 250px; transform: none !important; }
+  .hero-product-image { border-radius: 16px; background-position: center; transform: perspective(900px) rotateX(2deg) rotateY(-4deg); }
+  .hero-glass-panel { right: 12px; bottom: 12px; min-width: 0; padding: 11px 12px; }
+  .hero-glass-panel b { font-size: 10px; }.hero-glass-panel small { font-size: 9px; }
+  .landing { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+  .landing-dock { position: fixed; z-index: 60; bottom: calc(12px + env(safe-area-inset-bottom)); left: 50%; display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); width: min(calc(100vw - 24px), 430px); min-height: 62px; padding: 5px; border: 1px solid #ffffff52; border-radius: 20px; background: linear-gradient(135deg,#2b151dd9,#5b2537cf); box-shadow: 0 15px 40px #16080b52; backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3); transform: translateX(-50%); }
+  .landing-dock a { display: grid; place-items: center; align-content: center; gap: 3px; min-width: 0; min-height: 50px; color: #eadfda; border-radius: 15px; font-size: 9px; font-weight: 600; }
+  .landing-dock a svg { width: 17px; height: 17px; }.landing-dock a.active { color: #351019; background: #f1d7a0; box-shadow: 0 4px 12px #0002; }
   .hero-bottom { left: 22px; right: 22px; bottom: 18px; font-size: 9px; letter-spacing: 1px; }
   .hero-bottom a { font-size: 9px; }
   .section, .why, .pricing { padding: 76px 22px; }
@@ -59,6 +68,14 @@
   .cta-flower { right: 2%; top: 12%; font-size: 72px; }
   .landing footer { min-height: 0; padding: 22px; align-items: flex-start; flex-direction: column; gap: 16px; }
   .landing footer > div { flex-wrap: wrap; gap: 12px 20px; font-size: 13px; }
+
+  .reservations-layout { grid-template-columns: minmax(0,1fr); gap: 12px; }
+  .reservation-create { padding: 18px 15px; }.reservation-list .reservation-panel-heading { padding: 17px 15px; }
+  .reservation-panel-heading small { max-width: 135px; text-align: right; line-height: 1.35; }
+  .reservation-row { grid-template-columns: 57px minmax(0,1fr) auto; gap: 9px; padding: 13px 14px; }
+  .reservation-row .reservation-status { grid-column: 2; justify-self: start; }.reservation-actions { grid-column: 3; grid-row: 1 / span 2; flex-direction: column; }
+  .reservation-actions button { min-height: 34px; font-size: 10px; }.reservation-actions .reservation-cancel { width: 34px; }
+  .reservation-guest small { white-space: normal; line-height: 1.45; }.reservation-field-row { gap: 8px; }
 
   /* Restaurant menu and table ordering */
   .menu-page { padding-bottom: calc(82px + env(safe-area-inset-bottom)); }
